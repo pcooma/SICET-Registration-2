@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SICET 2026 — Conference Registration</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css?v=11">
+</head>
+
+<body>
+
+    <!-- SICET 2026 Conference Banner -->
+    <div style="width:100%;background:#1b3a1a;line-height:0;padding:12px 0;">
+        <img src="banner.png" alt="SICET 2026 - 5th SLIIT International Conference on Engineering and Technology" style="width:75%;max-width:1050px;height:auto;display:block;margin:0 auto;border-radius:6px;">
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="admin-login-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3><i class='bx bx-lock-alt'></i> Admin Login</h3>
+                <button class="modal-close" id="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="admin-username">Username</label>
+                    <input type="email" id="admin-username" placeholder="Enter admin email" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="admin-password">Password</label>
+                    <input type="password" id="admin-password" placeholder="Enter password" autocomplete="current-password">
+                </div>
+                <p id="login-error" class="login-error hidden">Invalid credentials. Please try again.</p>
+                <button id="btn-login-submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem;">
+                    <i class='bx bx-log-in'></i> Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="background-globes">
+        <div class="globe globe-1"></div>
+        <div class="globe globe-2"></div>
+        <div class="globe globe-3"></div>
+    </div>
+
+    <nav class="navbar">
+        <div class="nav-content">
+            <h1 class="logo">SICET<span>2026</span></h1>
+            <div class="nav-links">
+                <button class="nav-btn active" id="nav-form">Registration</button>
+                <button class="nav-btn" id="nav-admin" style="display:none;">Dashboard</button>
+                <button class="nav-btn" id="nav-settings"><i class='bx bx-lock-alt'></i> Admin Login</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- Registration Form Section -->
+        <section id="form-section" class="view-section active">
+            <div class="form-wrapper glass-panel">
+                <div class="form-header">
+                    <h2>Conference Registration</h2>
+                    <p>Complete this form to register for SICET 2026. You may register for the Main Conference, Excellence Award, and/or Excursion.</p>
+                </div>
+
+                <form id="registration-form">
+                    <!-- Common Fields -->
+                    <div class="form-group row">
+                        <div class="input-field col">
+                            <label for="title">Title <span class="required">*</span></label>
+                            <select id="title" name="Title" required>
+                                <option value="" disabled selected>Select Title</option>
+                                <option value="Mr.">Mr.</option>
+                                <option value="Ms.">Ms.</option>
+                                <option value="Dr.">Dr.</option>
+                                <option value="Prof.">Prof.</option>
+                                <option value="Rev.">Rev.</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="input-field col-large">
+                            <label for="fullName">Full Name with Initials <span class="required">*</span></label>
+                            <input type="text" id="fullName" name="Full_Name" placeholder="E.g. J. Doe" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <div class="input-field col">
+                            <label for="email">Email Address <span class="required">*</span></label>
+                            <input type="email" id="email" name="Email" placeholder="your.email@example.com" required>
+                        </div>
+                        <div class="input-field col">
+                            <label for="phone">Phone Number (with country code) <span class="required">*</span></label>
+                            <input type="tel" id="phone" name="Phone" placeholder="+94 77 123 4567" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="organization">Organization / Company <span class="required">*</span></label>
+                        <input type="text" id="organization" name="Organization"
+                            placeholder="Enter your organization name" required>
+                    </div>
+
+                    <!-- 1. Identity Phase -->
+                    <div class="form-group highlight-box" style="margin-bottom: 25px;">
+                        <h4 style="margin-bottom: 15px; color: var(--accent);">Attendee Profile</h4>
+                        <div class="form-group row" style="margin-bottom: 0;">
+                            <div class="input-field col">
+                                <label for="attendeeRegion">Attendee Region <span class="required">*</span></label>
+                                <select id="attendeeRegion" name="Attendee_Region" class="price-trigger" required>
+                                    <option value="" disabled selected>Select Region</option>
+                                    <option value="Local">Local (Sri Lanka)</option>
+                                    <option value="SAARC">SAARC Countries</option>
+                                    <option value="Non-SAARC">Non-SAARC Countries</option>
+                                </select>
+                            </div>
+                            <div id="country-field-group" class="input-field col">
+                                <label for="country">Country <span class="required">*</span></label>
+                                <input type="text" id="country" name="Country" placeholder="E.g. Canada" required>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label for="attendeeCategory">Attendee Category <span class="required">*</span></label>
+                            <select id="attendeeCategory" name="Attendee_Category" class="price-trigger" required>
+                                <option value="" disabled selected>Select Category</option>
+                                <option value="Author">Author</option>
+                                <option value="Non-Author">Non-Author</option>
+                                <option value="Student">Student</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 2. Action Phase -->
+                    <div class="form-group highlight-box" style="margin-bottom: 25px;">
+                        <h4 style="margin-bottom: 15px; color: var(--accent);">What are you registering for? <span
+                                class="required">*</span></h4>
+                        <div class="form-checkbox mb-2">
+                            <input type="checkbox" id="toggleMain" name="Registering_Main"
+                                class="section-toggle price-trigger" value="Main Conference">
+                            <label for="toggleMain" style="font-weight: 600;">I am attending the Main Conference</label>
+                        </div>
+                        <div class="form-checkbox mb-2">
+                            <input type="checkbox" id="toggleAward" name="Registering_Award"
+                                class="section-toggle price-trigger" value="Excellence Award">
+                            <label for="toggleAward" style="font-weight: 600;">I am applying for the Excellence
+                                Award</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="toggleExcursion" name="Registering_Excursion"
+                                class="section-toggle price-trigger" value="Excursion">
+                            <label for="toggleExcursion" style="font-weight: 600;">I am joining the Excursion</label>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic paper blocks will be injected inside section-main -->
+
+                    <!-- Dynamic Sections -->
+                    <!-- 1. Main Conference -->
+                    <div id="section-main" class="dynamic-section hidden">
+                        <h3 class="section-title">Main Conference Details</h3>
+                        <div class="form-group">
+                            <label for="nameCertificate">Name to Appear on Certificate (BLOCK LETTERS)</label>
+                            <input type="text" id="nameCertificate" name="Certificate_Name" placeholder="JOHN DOE">
+                        </div>
+                        <div class="form-group row">
+                            <div class="input-field col">
+                                <label for="designation">Designation / Post</label>
+                                <input type="text" id="designation" name="Designation"
+                                    placeholder="E.g. Senior Lecturer">
+                            </div>
+                            <div class="input-field col">
+                                <!-- Removed duplicate attendeeCategory field - kept the one below with proper attributes -->
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="address">Postal / Mailing Address</label>
+                            <textarea id="address" name="Address" rows="2"
+                                placeholder="Street, City, Country, Postal Code"></textarea>
+                        </div>
+                        <div class="form-group row">
+                            <div class="input-field col">
+                                <label for="foodPreference">Dietary Preference <span class="required">*</span></label>
+                                <select id="foodPreference" name="Food_Preference" required>
+                                    <option value="" disabled selected>Select Dietary Preference</option>
+                                    <option value="Vegetarian">Vegetarian</option>
+                                    <option value="Non-Vegetarian">Non-Vegetarian</option>
+                                    <option value="Vegan">Vegan</option>
+                                    <option value="Special Dietary Needs">Special Dietary Needs</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Papers section - hidden for Non-Authors -->
+                        <div id="papers-section">
+                            <div class="form-group">
+                                <label for="numberOfPapers">Number of Papers <span class="required">*</span></label>
+                                <input type="number" id="numberOfPapers" name="Number_of_Papers" min="1" max="10"
+                                    value="1" placeholder="1" class="price-trigger" required>
+                                <small class="helper-text discount-hint hidden">10% student discount applies from 2nd
+                                    paper!</small>
+                            </div>
+                        </div>
+
+                        <!-- Student ID Upload - inside section-main -->
+                        <div class="form-group upload-group hidden" id="studentIdSection">
+                            <label for="studentId">Upload Student ID <span
+                                    class="required student-required hidden">*</span></label>
+                            <input type="file" id="studentId" name="Student_ID_File" accept="image/*,.pdf">
+                            <small class="helper-text">Maximum file size: 5MB (JPEG, PNG, PDF)</small>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Papers Container - hidden for Non-Authors -->
+                    <div id="dynamic-papers-container" class="mt-4">
+                        <!-- JS will populate Paper 1, 2, 3 here -->
+                    </div>
+
+
+
+                    <!-- 3. Excellence Award -->
+                    <div id="section-award" class="dynamic-section hidden">
+                        <h3 class="section-title">Excellence Award Registration</h3>
+                        <div class="form-group row">
+                            <div class="input-field col">
+                                <label for="companyName">Company Name</label>
+                                <input type="text" id="companyName" name="Company_Name"
+                                    placeholder="Enter company name">
+                            </div>
+                            <div class="input-field col">
+                                <label for="participantCount">Number of Participants</label>
+                                <input type="number" id="participantCount" name="Participant_Count" min="1" value="1"
+                                    placeholder="1" class="price-trigger">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="participantNames">Full Names of All Participants</label>
+                            <textarea id="participantNames" name="Participant_Names" rows="2"
+                                placeholder="List all participants separated by commas"></textarea>
+                        </div>
+                        <div class="form-group row">
+                            <div class="input-field col">
+                                <label for="awardCategory">Category Applied For</label>
+                                <select id="awardCategory" name="Award_Category">
+                                    <option value="" disabled selected>Select Category</option>
+                                    <option value="Innovation">Innovation</option>
+                                    <option value="Sustainability">Sustainability</option>
+                                    <option value="Leadership">Leadership</option>
+                                </select>
+                            </div>
+                            <div class="input-field col">
+                                <label for="primaryReason">Primary Purpose of Attendance</label>
+                                <select id="primaryReason" name="Primary_Reason">
+                                    <option value="" disabled selected>Select Purpose</option>
+                                    <option value="Networking">Networking</option>
+                                    <option value="To Receive Award">To Receive Award</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Excursion Add-on -->
+                    <div id="section-excursion" class="dynamic-section hidden">
+                        <h3 class="section-title">Excursion Details</h3>
+                        <p>Join us for a cultural and networking excursion to scenic locations in Sri Lanka.</p>
+                        <div class="form-group row mt-3">
+                            <div id="excursion-local-ticket-group" class="input-field col">
+                                <label for="excursionLocalCount">Local Participant Tickets (Sri Lankan Citizens) <span
+                                        class="required">*</span></label>
+                                <input type="number" id="excursionLocalCount" name="Excursion_Local_Count" min="0"
+                                    value="0" placeholder="0" class="price-trigger">
+                            </div>
+                            <div id="excursion-foreign-ticket-group" class="input-field col">
+                                <label for="excursionForeignCount">International Participant Tickets <span
+                                        class="required">*</span></label>
+                                <input type="number" id="excursionForeignCount" name="Excursion_Foreign_Count" min="0"
+                                    value="0" placeholder="0" class="price-trigger">
+                            </div>
+                        </div>
+                        <!-- Excursion specific details -->
+                        <div class="form-group row mt-2">
+                            <div class="input-field col">
+                                <label for="excrMobility">Any strict mobility requirements?</label>
+                                <select id="excrMobility" name="Excursion_Mobility">
+                                    <option value="None" selected>None</option>
+                                    <option value="Wheelchair Access">Wheelchair Access Needed</option>
+                                    <option value="Limited Walking">Limited Walking preferred</option>
+                                </select>
+                            </div>
+                            <div class="input-field col">
+                                <label for="excrShopping">Preferred Activity</label>
+                                <select id="excrShopping" name="Excursion_Activity">
+                                    <option value="Sightseeing" selected>Sightseeing mostly</option>
+                                    <option value="Shopping">Shopping & Local Crafts</option>
+                                    <option value="Historical Sites">Historical Sites</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fee Calculator & Invoice (shown only when a registration type is selected) -->
+                    <div id="remaining-form" class="hidden">
+
+                        <!-- Dynamic Total Price Calculation Box -->
+                        <div class="price-calculator-box mt-4 hidden" id="price-calculator-box">
+
+                            <!-- Fee Title + Breakdown Grid -->
+                            <div class="price-details">
+                                <h3><i class='bx bx-calculator' style="color:var(--accent);margin-right:6px;"></i>Total
+                                    Registration Fee</h3>
+                                <div class="price-breakdown" id="price-breakdown">
+                                    <span style="color:var(--text-muted);">Select options above to calculate fees</span>
+                                </div>
+                            </div>
+
+                            <!-- Total Amount Row -->
+                            <div class="price-total-row">
+                                <span class="price-label">TOTAL DUE</span>
+                                <div class="price-value">
+                                    <span class="currency">LKR</span>
+                                    <span class="amount" id="totalPriceAmount">0.00</span>
+                                </div>
+                            </div>
+
+                            <!-- Divider -->
+                            <div style="border-top: 1px dashed rgba(255,255,255,0.1);"></div>
+
+                            <!-- Invoice Billing Details -->
+                            <div class="billing-section">
+                                <h4
+                                    style="margin-bottom: 12px; color: var(--accent); font-size: 1rem; font-weight:600;">
+                                    <i class='bx bxs-file-pdf' style="margin-right:6px;"></i>Invoice Billing Details
+                                </h4>
+                                <div class="billing-options" style="margin-bottom: 14px;">
+                                    <div class="billing-radio-item">
+                                        <input type="radio" id="billToPersonal" name="Bill_To" value="Personal" checked
+                                            class="billing-toggle">
+                                        <label for="billToPersonal">Bill to Myself (Personal)</label>
+                                    </div>
+                                    <div class="billing-radio-item">
+                                        <input type="radio" id="billToOrg" name="Bill_To" value="Organization"
+                                            class="billing-toggle">
+                                        <label for="billToOrg">Bill to My Organization / Institution</label>
+                                    </div>
+                                </div>
+
+                                <div id="org-billing-details" class="hidden">
+                                    <div class="form-group row">
+                                        <div class="input-field col">
+                                            <label for="orgLegalName">Organization Legal Name <span
+                                                    class="required">*</span></label>
+                                            <input type="text" id="orgLegalName" name="Billing_Org_Name"
+                                                placeholder="E.g. University of Colombo">
+                                        </div>
+                                        <div class="input-field col">
+                                            <label for="orgTaxId">Tax / VAT No. <span
+                                                    style="color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                            <input type="text" id="orgTaxId" name="Billing_Tax_ID"
+                                                placeholder="Tax ID if applicable">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="orgBillingAddress">Organization Billing Address <span
+                                                class="required">*</span></label>
+                                        <textarea id="orgBillingAddress" name="Billing_Address" rows="2"
+                                            placeholder="Full billing address of the organization"></textarea>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label for="orgFinanceEmail">Finance Contact Email <span
+                                                style="color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                        <input type="email" id="orgFinanceEmail" name="Billing_Finance_Email"
+                                            placeholder="finance@organization.edu">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Invoice Download Button -->
+                            <button type="button" class="btn" id="btn-download-invoice"
+                                style="width:100%; padding:12px; font-size:1rem; justify-content:center; background:linear-gradient(135deg,rgba(42,107,42,0.25),rgba(197,215,58,0.12)); border:1px solid rgba(197,215,58,0.4); color:var(--accent);">
+                                <i class='bx bxs-file-pdf'></i> Download Proforma Invoice
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Payment & Submission — always visible so users know what is needed -->
+                    <div class="payment-section mt-4">
+                        <h3 class="section-title">Payment &amp; Submission</h3>
+
+                        <!-- Payment Method & Policy Notice -->
+                        <div class="highlight-box" style="background:rgba(0,120,200,0.06);border:1px solid rgba(0,150,255,0.25);margin-bottom:18px;padding:14px 18px;">
+                            <h4 style="color:#4a9eff;margin-bottom:10px;font-size:0.93rem;"><i class='bx bx-info-circle' style="margin-right:6px;"></i>Payment Methods &amp; Policies — Please Read Before Paying</h4>
+                            <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:0.87rem;line-height:2;">
+                                <li><strong style="color:var(--text-light);">Direct Deposit:</strong> Available for local (Sri Lanka) attendees only.</li>
+                                <li><strong style="color:var(--text-light);">Wire Transfer:</strong> Payment must be received within 30 days of registration.</li>
+                                <li><strong style="color:var(--text-light);">Debit/Credit Card:</strong> A 1.5% processing commission will be added to your total at checkout.</li>
+                                <li><strong style="color:var(--text-light);">Refund Policy:</strong> All refund requests must be sent to <a href="mailto:sicet@sliit.lk" style="color:#4a9eff;">sicet@sliit.lk</a> by <span id="notice-refund-deadline">August 23, 2025</span>. An administrative fee of US$20 / LKR 6,000 applies to all refunds.</li>
+                            </ul>
+                        </div>
+
+                        <div class="highlight-box" style="background:rgba(197,215,58,0.06);border:1px dashed rgba(197,215,58,0.35);margin-bottom:20px;padding:16px 20px;">
+                            <p style="margin:0;color:var(--text-muted);font-size:0.93rem;line-height:2;">
+                                <i class='bx bx-list-check' style="color:var(--accent);margin-right:6px;vertical-align:middle;"></i>
+                                <strong style="color:var(--text-light);">Steps to complete your registration:</strong><br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">①</strong> Select your registration type(s) above and fill in all required details.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">②</strong> Download the <strong style="color:var(--accent);">Proforma Invoice</strong> (appears above once type is selected) to see your total fee.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">③</strong> Make payment at the SLIIT portal following the instructions below.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">④</strong> Upload your payment receipt below and click <strong>Submit Registration</strong> to confirm.
+                            </p>
+                        </div>
+
+                        <!-- Payment Instructions -->
+                            <div class="highlight-box" style="margin-bottom:20px;">
+                                <h4 style="color:var(--accent);margin-bottom:12px;"><i class='bx bx-credit-card' style="margin-right:6px;"></i>How to Make Your Payment</h4>
+                                <ol style="margin:0;padding-left:1.4rem;color:var(--text-light);line-height:2;">
+                                    <li>Visit the SLIIT payment portal: <a href="https://pay.sliit.lk/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;">https://pay.sliit.lk/</a></li>
+                                    <li>Under <strong style="color:var(--accent);">Purpose of Payment</strong>, select <strong>"Any other payment"</strong> from the dropdown.</li>
+                                    <li>In the <strong style="color:var(--accent);">Description</strong> field, enter: <strong>"SICET 2026"</strong></li>
+                                    <li>Complete the payment and save your transaction receipt.</li>
+                                    <li>Upload the receipt and enter the Transaction Reference Number below.</li>
+                                </ol>
+                            </div>
+
+                            <div class="form-group row">
+                                <div class="input-field col">
+                                    <label for="paymentProof">Upload Proof of Payment <span class="required">*</span></label>
+                                    <input type="file" id="paymentProof" name="Payment_Proof" accept="image/*,.pdf"
+                                        class="file-input">
+                                    <small class="helper-text">After completing payment, download the receipt or take a screenshot and upload it here. Accepted formats: JPEG, PNG, PDF (max 5MB).</small>
+                                </div>
+                                <div class="input-field col">
+                                    <label for="transRef">Transaction Reference Number</label>
+                                    <input type="text" id="transRef" name="Transaction_Ref"
+                                        placeholder="E.g. REF12345678">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="additionalInfo">Additional Notes or Special Requirements</label>
+                                <textarea id="additionalInfo" name="Additional_Info" rows="2"
+                                    placeholder="Any special requirements, accessibility needs, or additional information..."></textarea>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary btn-blocked" id="btn-submit">
+                                <span>Submit Registration</span>
+                                <i class='bx bx-right-arrow-alt'></i>
+                            </button>
+                            <p id="submit-payment-note" class="helper-text" style="text-align:center;margin-top:10px;color:#e0a000;">
+                                <i class='bx bx-error-circle'></i> Upload your proof of payment above to enable submission.
+                            </p>
+                        </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Admin Dashboard Section -->
+        <section id="admin-section" class="view-section hidden">
+            <div class="admin-wrapper glass-panel">
+                <div class="admin-header">
+                    <div class="admin-title">
+                        <h2>Registration Dashboard</h2>
+                        <p>Registrations are stored in Google Drive. Use Refresh to load them.</p>
+                    </div>
+                    <div class="admin-actions">
+                        <button id="btn-clear" class="btn btn-secondary btn-sm">
+                            <i class='bx bx-refresh'></i> Refresh from Drive
+                        </button>
+                        <button id="btn-export" class="btn btn-success">
+                            <i class='bx bxs-file-export'></i> Export to Excel
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <i class='bx bx-file'></i>
+                        <div class="stat-info">
+                            <h4 id="stat-total">0</h4>
+                            <span>Total Registrations</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class='bx bx-globe'></i>
+                        <div class="stat-info">
+                            <h4 id="stat-main">0</h4>
+                            <span>Main Conference</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class='bx bx-award'></i>
+                        <div class="stat-info">
+                            <h4 id="stat-award">0</h4>
+                            <span>Awards & Excursions</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table" id="submissions-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Reg. Type</th>
+                                <th>Organization</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- Dynamic Rows -->
+                            <tr class="empty-row">
+                                <td colspan="5">No registrations found. Click "Refresh from Drive" to load submissions.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Settings Section -->
+        <section id="settings-section" class="view-section hidden">
+            <div class="admin-wrapper glass-panel">
+                <div class="admin-header">
+                    <div class="admin-title">
+                        <h2>Pricing Settings</h2>
+                        <p>Configure dynamic registration fees globally.</p>
+                    </div>
+                    <div class="admin-actions">
+                        <button id="btn-save-settings" class="btn btn-success">
+                            <i class='bx bx-save'></i> Save Settings
+                        </button>
+                    </div>
+                </div>
+
+                <form id="settings-form" class="settings-grid">
+
+                    <!-- Main Conference Form Config -->
+                    <div class="settings-card">
+                        <h3><i class='bx bx-globe'></i> Main Conference Fees</h3>
+                        <div class="settings-group">
+                            <h4>Local (LKR)</h4>
+                            <div class="form-group row">
+                                <div class="input-field col"><label>Author</label><input type="number"
+                                        id="fee_conf_local_author" required></div>
+                                <div class="input-field col"><label>Non-Author</label><input type="number"
+                                        id="fee_conf_local_nonauthor" required></div>
+                                <div class="input-field col"><label>Student</label><input type="number"
+                                        id="fee_conf_local_student" required></div>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <h4>SAARC (USD)</h4>
+                            <div class="form-group row">
+                                <div class="input-field col"><label>Author</label><input type="number"
+                                        id="fee_conf_saarc_author" required></div>
+                                <div class="input-field col"><label>Non-Author</label><input type="number"
+                                        id="fee_conf_saarc_nonauthor" required></div>
+                                <div class="input-field col"><label>Student</label><input type="number"
+                                        id="fee_conf_saarc_student" required></div>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <h4>Non-SAARC (USD)</h4>
+                            <div class="form-group row">
+                                <div class="input-field col"><label>Author</label><input type="number"
+                                        id="fee_conf_nonsaarc_author" required></div>
+                                <div class="input-field col"><label>Non-Author</label><input type="number"
+                                        id="fee_conf_nonsaarc_nonauthor" required></div>
+                                <div class="input-field col"><label>Student</label><input type="number"
+                                        id="fee_conf_nonsaarc_student" required></div>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <h4>Discounts %</h4>
+                            <div class="form-group">
+                                <label>Student Discount (2nd Paper onwards)</label>
+                                <input type="number" id="fee_conf_student_discount" min="0" max="100"
+                                    placeholder="e.g. 10" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Excursion & Awards Config -->
+                    <div class="settings-card">
+                        <h3><i class='bx bx-award'></i> Awards & Excursion</h3>
+                        <div class="settings-group">
+                            <h4>Excellence Award (LKR)</h4>
+                            <div class="form-group">
+                                <label>Base Fee (Per Person)</label>
+                                <input type="number" id="fee_award_base" required>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <h4>Excursion (LKR)</h4>
+                            <div class="form-group row">
+                                <div class="input-field col"><label>Local</label><input type="number"
+                                        id="fee_excursion_local" required></div>
+                                <div class="input-field col"><label>Foreigner</label><input type="number"
+                                        id="fee_excursion_foreigner" required></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- APC Journals Config -->
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bx-book'></i> APC Journals & Fees</h3>
+                        <div class="journals-list" id="journals-list">
+                            <!-- Dynamic journals -->
+                        </div>
+                        <button type="button" id="btn-add-journal" class="btn btn-sm btn-primary mt-2">
+                            <i class='bx bx-plus'></i> Add New Journal
+                        </button>
+                    </div>
+
+                    <!-- Invoice Settings -->
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bxs-file-pdf'></i> Invoice Settings</h3>
+                        <div class="settings-group">
+                            <h4>Proforma Invoice Signatory</h4>
+                            <div class="form-group">
+                                <label for="setting_chair_name">Registration Chair Name <span
+                                        class="required">*</span></label>
+                                <input type="text" id="setting_chair_name" placeholder="e.g. Kapila Jayaratne"
+                                    style="max-width: 400px;">
+                                <small style="color:var(--text-muted); margin-top:4px; display:block;">
+                                    Enter full name with title (e.g. Prof. Jayaratne, Dr. Perera, Mr. Silva). Appears on
+                                    the invoice signature.
+                                </small>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <h4>Refund Policy Deadline</h4>
+                            <div class="form-group">
+                                <label for="setting_refund_deadline">Refund Request Deadline Date <span
+                                        class="required">*</span></label>
+                                <input type="text" id="setting_refund_deadline" placeholder="e.g. August 23, 2025"
+                                    style="max-width: 300px;">
+                                <small style="color:var(--text-muted); margin-top:4px; display:block;">
+                                    This date appears in the refund policy note on the Proforma Invoice and in the payment notice on the registration form.
+                                </small>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <h4>USD Exchange Rate</h4>
+                            <div class="form-group">
+                                <label for="setting_usd_rate">Indicative Rate: 1 USD = LKR <span class="required">*</span></label>
+                                <input type="number" id="setting_usd_rate" placeholder="e.g. 320" step="0.01" min="1"
+                                    style="max-width: 200px;">
+                                <small style="color:var(--text-muted); margin-top:4px; display:block;">
+                                    Shown on the invoice as an approximate LKR equivalent for USD charges. Update this before going live.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- Custom JS -->
+    <!-- Add SheetJS Script for Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- Add jsPDF Script for Invoice Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="app.js?v=20"></script>
+</body>
+
+</html>
