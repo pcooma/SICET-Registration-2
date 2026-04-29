@@ -1185,12 +1185,10 @@ function generateInvoice() {
     const pdfFileName = `SICET2026_Invoice_${invoiceNum}_${safeName}.pdf`;
     doc.save(pdfFileName);
 
-    // Save PDF + registration JSON to Drive so ref ID lookup works (async, non-blocking)
+    // Save registration JSON to Drive so ref ID lookup works (single request, async non-blocking)
     if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
         (async () => {
             try {
-                const pdfBase64 = doc.output('datauristring').split(',')[1];
-                saveInvoiceToDrive(refId, fullName, pdfFileName, pdfBase64);
                 const dataObj = collectFormData(refId);
                 if (!dataObj.Status) dataObj.Status = 'Draft';
                 const studentIdInput = document.getElementById('studentId');
@@ -1205,24 +1203,6 @@ function generateInvoice() {
     if (step2) step2.classList.remove('hidden');
     document.querySelector('.payment-section.mt-4')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     showToast(`Invoice downloaded! Reference ID: ${refId} — please save this!`, 'success');
-}
-
-async function saveInvoiceToDrive(refId, fullName, fileName, base64Data) {
-    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
-    // Always enforce .pdf extension and correct MIME type for finance use
-    const safeName = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
-    try {
-        await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify({
-                action: 'saveInvoice',
-                Invoice_ID: refId,
-                Full_Name: fullName,
-                invoice_pdf: { name: safeName, mimeType: 'application/pdf', data: base64Data }
-            })
-        });
-    } catch (_) { /* silent */ }
 }
 
 // ---- DRAFT (AUTO-SAVE) LOGIC ----
