@@ -50,9 +50,10 @@ const registrationForm = document.getElementById('registration-form');
 
 // Sections
 const sections = {
-    'Main Conference': document.getElementById('section-main'),
-    'Excellence Award': document.getElementById('section-award'),
-    'Excursion': document.getElementById('section-excursion')
+    'Main Conference':        document.getElementById('section-main'),
+    'Excellence Award':       document.getElementById('section-award'),
+    'Excursion':              document.getElementById('section-excursion'),
+    'Pre-Conference Sessions': document.getElementById('section-preconf')
 };
 
 // Navigation
@@ -471,11 +472,12 @@ function updateExcursionTicketVisibility() {
 }
 
 function calculateTotalFee() {
-    const isMain     = document.getElementById('toggleMain').checked;
-    const isAward    = document.getElementById('toggleAward').checked;
+    const isMain      = document.getElementById('toggleMain').checked;
+    const isAward     = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
+    const isPreConf   = document.getElementById('togglePreConf')?.checked || false;
 
-    if (!isMain && !isAward && !isExcursion) {
+    if (!isMain && !isAward && !isExcursion && !isPreConf) {
         priceBox.classList.add('hidden');
         priceCurrency.textContent = 'LKR';
         priceTotalAmount.textContent = '0.00';
@@ -553,33 +555,34 @@ function calculateTotalFee() {
             }
         });
 
-        // Inauguration opt-in — LKR for local, USD for non-local
-        const inaugCheck = document.getElementById('includeInauguration');
-        if (inaugCheck?.checked) {
-            const inaugFee = isLocalRegion ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
-            const inaugCur = isLocalRegion ? 'LKR' : 'USD';
-            if (inaugFee > 0) {
-                const disp = toDisplay(inaugFee, inaugCur);
+    }
+
+    // Inauguration opt-in — student opt-in, available regardless of registration type
+    const inaugCheck = document.getElementById('includeInauguration');
+    if (inaugCheck?.checked) {
+        const inaugFee = isLocalRegion ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
+        const inaugCur = isLocalRegion ? 'LKR' : 'USD';
+        if (inaugFee > 0) {
+            const disp = toDisplay(inaugFee, inaugCur);
+            displayTotal += disp;
+            br(); breakdownText += `<span>Inauguration Ceremony:</span><span>${disp} ${displayCur}</span>`;
+        }
+    }
+
+    // Pre-conference sessions — standalone or as add-on
+    document.querySelectorAll('.preconf-session-check').forEach(chk => {
+        if (chk.checked) {
+            const sessId = chk.dataset.sessId;
+            const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === sessId);
+            if (sess) {
+                const rawFee = isLocalRegion ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                const nativeCur2 = isLocalRegion ? 'LKR' : 'USD';
+                const disp = toDisplay(rawFee, nativeCur2);
                 displayTotal += disp;
-                br(); breakdownText += `<span>Inauguration Ceremony:</span><span>${disp} ${displayCur}</span>`;
+                br(); breakdownText += `<span>Session: ${sess.name}:</span><span>${disp} ${displayCur}</span>`;
             }
         }
-
-        // Pre-conference sessions
-        document.querySelectorAll('.preconf-session-check').forEach(chk => {
-            if (chk.checked) {
-                const sessId = chk.dataset.sessId;
-                const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === sessId);
-                if (sess) {
-                    const rawFee = isLocalRegion ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
-                    const nativeCur2 = isLocalRegion ? 'LKR' : 'USD';
-                    const disp = toDisplay(rawFee, nativeCur2);
-                    displayTotal += disp;
-                    br(); breakdownText += `<span>Session: ${sess.name}:</span><span>${disp} ${displayCur}</span>`;
-                }
-            }
-        });
-    }
+    });
 
     // 2. Excellence Award (LKR)
     if (isAward) {
@@ -629,9 +632,10 @@ function collectFormData(refId) {
     dataObj['Calculated_Total_Fee'] = document.getElementById('totalPriceAmount').textContent;
     dataObj['Currency'] = document.querySelector('.price-value .currency').textContent;
     const typesArr = [];
-    if (document.getElementById('toggleMain').checked)    typesArr.push('Main');
-    if (document.getElementById('toggleAward').checked)   typesArr.push('Award');
-    if (document.getElementById('toggleExcursion').checked) typesArr.push('Excursion');
+    if (document.getElementById('toggleMain').checked)       typesArr.push('Main');
+    if (document.getElementById('toggleAward').checked)      typesArr.push('Award');
+    if (document.getElementById('toggleExcursion').checked)  typesArr.push('Excursion');
+    if (document.getElementById('togglePreConf')?.checked)   typesArr.push('Pre-Conference Sessions');
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
     return dataObj;
 }
@@ -639,10 +643,11 @@ function collectFormData(refId) {
 // STEP 1 — Save draft + get Ref ID (no payment proof required)
 async function handleStep1(e) {
     e?.preventDefault();
-    const isMain = document.getElementById('toggleMain').checked;
-    const isAward = document.getElementById('toggleAward').checked;
+    const isMain     = document.getElementById('toggleMain').checked;
+    const isAward    = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
-    if (!isMain && !isAward && !isExcursion) {
+    const isPreConf  = document.getElementById('togglePreConf')?.checked || false;
+    if (!isMain && !isAward && !isExcursion && !isPreConf) {
         showToast('Please select at least one registration type.', 'error'); return;
     }
     if (isExcursion) {
@@ -741,11 +746,12 @@ function generateInvoice() {
     const country = document.getElementById('country').value || '';
     const category = document.getElementById('attendeeCategory').value || '';
 
-    const isMain = document.getElementById('toggleMain').checked;
-    const isAward = document.getElementById('toggleAward').checked;
+    const isMain     = document.getElementById('toggleMain').checked;
+    const isAward    = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
+    const isPreConf  = document.getElementById('togglePreConf')?.checked || false;
 
-    if (!isMain && !isAward && !isExcursion) {
+    if (!isMain && !isAward && !isExcursion && !isPreConf) {
         showToast('Please select registration items to generate an invoice.', 'error');
         return;
     }
@@ -838,25 +844,26 @@ function generateInvoice() {
             addItem(`Conference Registration — ${title} ${fullName} (${category}, ${region})`, baseFee, nativeCur);
         }
 
-        // Inauguration opt-in — LKR for local, USD for non-local
-        const inaugCheck = document.getElementById('includeInauguration');
-        if (inaugCheck?.checked) {
-            const inaugFee = isLocalInv ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
-            const inaugCur = isLocalInv ? 'LKR' : 'USD';
-            if (inaugFee > 0) addItem('Inauguration Ceremony (opt-in)', inaugFee, inaugCur);
-        }
-
-        // Pre-conference sessions
-        document.querySelectorAll('.preconf-session-check').forEach(chk => {
-            if (chk.checked) {
-                const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
-                if (sess) {
-                    const rawFee = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
-                    addItem(`Pre-Conference Session: ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
-                }
-            }
-        });
     }
+
+    // Inauguration opt-in — student opt-in, independent of registration type
+    const inaugCheck = document.getElementById('includeInauguration');
+    if (inaugCheck?.checked) {
+        const inaugFee = isLocalInv ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
+        const inaugCur = isLocalInv ? 'LKR' : 'USD';
+        if (inaugFee > 0) addItem('Inauguration Ceremony (opt-in)', inaugFee, inaugCur);
+    }
+
+    // Pre-conference sessions — standalone or as add-on
+    document.querySelectorAll('.preconf-session-check').forEach(chk => {
+        if (chk.checked) {
+            const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
+            if (sess) {
+                const rawFee = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                addItem(`Pre-Conference Session: ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
+            }
+        }
+    });
 
     if (isAward) {
         const pax = parseInt(document.getElementById('participantCount').value) || 1;
@@ -1128,7 +1135,7 @@ function restoreDraft() {
     if (!formDraft) return;
 
     // 1. Initial Type & Section Load
-    const toggles = ['Registering_Main', 'Registering_Award', 'Registering_Excursion'];
+    const toggles = ['Registering_Main', 'Registering_Award', 'Registering_Excursion', 'Registering_PreConf'];
     toggles.forEach(t => {
         if (formDraft[t] === true) {
             const el = document.querySelector(`[name="${t}"]`);

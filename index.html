@@ -137,6 +137,15 @@
                         </div>
                     </div>
 
+                    <!-- Inauguration Ceremony opt-in — shown for student-type categories only -->
+                    <div id="inauguration-section" class="form-group highlight-box hidden" style="margin-top:-10px;margin-bottom:25px;background:rgba(74,104,255,0.07);border:1px solid rgba(74,104,255,0.25);">
+                        <p style="margin:0 0 10px;color:var(--text-muted);font-size:0.9rem;"><i class='bx bx-calendar-event' style="color:var(--accent);margin-right:6px;"></i>Student registrations do not include the Inauguration Ceremony by default. You may opt in for an additional fee.</p>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="includeInauguration" name="Include_Inauguration" class="price-trigger">
+                            <label for="includeInauguration">I would like to attend the Inauguration Ceremony</label>
+                        </div>
+                    </div>
+
                     <!-- 2. Action Phase -->
                     <div class="form-group highlight-box" style="margin-bottom: 25px;">
                         <h4 style="margin-bottom: 15px; color: var(--accent);">What are you registering for? <span
@@ -152,10 +161,15 @@
                             <label for="toggleAward" style="font-weight: 600;">I am applying for the Excellence
                                 Award</label>
                         </div>
-                        <div class="form-checkbox">
+                        <div class="form-checkbox mb-2">
                             <input type="checkbox" id="toggleExcursion" name="Registering_Excursion"
                                 class="section-toggle price-trigger" value="Excursion">
                             <label for="toggleExcursion" style="font-weight: 600;">I am joining the Excursion</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="togglePreConf" name="Registering_PreConf"
+                                class="section-toggle price-trigger" value="Pre-Conference Sessions">
+                            <label for="togglePreConf" style="font-weight: 600;">I am registering for Pre-Conference Sessions only</label>
                         </div>
                     </div>
 
@@ -216,21 +230,6 @@
                             <small class="helper-text">Maximum file size: 5MB (JPEG, PNG, PDF)</small>
                         </div>
 
-                        <!-- Inauguration Ceremony opt-in (Student only) -->
-                        <div id="inauguration-section" class="form-group highlight-box hidden" style="margin-top:12px;background:rgba(74,104,255,0.07);border:1px solid rgba(74,104,255,0.25);">
-                            <p style="margin:0 0 10px;color:var(--text-muted);font-size:0.9rem;"><i class='bx bx-calendar-event' style="color:var(--accent);margin-right:6px;"></i>Student registrations do not include the Inauguration Ceremony by default. You may opt in for an additional fee.</p>
-                            <div class="form-checkbox">
-                                <input type="checkbox" id="includeInauguration" name="Include_Inauguration" class="price-trigger">
-                                <label for="includeInauguration">I would like to attend the Inauguration Ceremony</label>
-                            </div>
-                        </div>
-
-                        <!-- Pre-Conference Sessions (dynamic) -->
-                        <div id="preconf-sessions-section" class="hidden" style="margin-top:16px;">
-                            <h4 style="color:var(--accent);margin-bottom:10px;font-size:1rem;"><i class='bx bx-notepad' style="margin-right:6px;"></i>Pre-Conference Sessions</h4>
-                            <p style="color:var(--text-muted);font-size:0.88rem;margin-bottom:10px;">Optional add-on sessions available before the main conference.</p>
-                            <div id="preconf-sessions-container"></div>
-                        </div>
                     </div>
 
                     <!-- Dynamic Papers Container - hidden for Non-Authors -->
@@ -318,6 +317,15 @@
                                     <option value="Historical Sites">Historical Sites</option>
                                 </select>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Pre-Conference Sessions -->
+                    <div id="section-preconf" class="dynamic-section hidden">
+                        <h3 class="section-title">Pre-Conference Sessions</h3>
+                        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:16px;">Select the workshop sessions you wish to attend before the main conference. These can be booked standalone or together with the Main Conference registration.</p>
+                        <div id="preconf-sessions-section" class="hidden">
+                            <div id="preconf-sessions-container"></div>
                         </div>
                     </div>
 
@@ -704,7 +712,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=24"></script>
+    <script src="app.js?v=25"></script>
 </body>
 
 </html>
