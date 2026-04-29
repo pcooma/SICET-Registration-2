@@ -452,12 +452,17 @@
                         </div>
 
                         <!-- Ref ID display -->
-                        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:14px 18px;background:rgba(197,215,58,0.08);border:1px solid rgba(197,215,58,0.3);border-radius:8px;">
+                        <div id="ref-id-box" style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:14px 18px;background:rgba(197,215,58,0.08);border:1px solid rgba(197,215,58,0.3);border-radius:8px;">
                             <i class='bx bx-id-card' style="font-size:1.6rem;color:var(--accent);flex-shrink:0;"></i>
-                            <div>
-                                <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:2px;">Your Registration Reference ID</div>
-                                <div style="font-size:1.2rem;font-weight:700;color:var(--text-light);letter-spacing:1px;" id="reg-ref-id">—</div>
-                                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">Generated when you click "Save &amp; Get Reference ID" below</div>
+                            <div style="flex:1;">
+                                <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Your Registration Reference ID</div>
+                                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+                                    <span style="font-size:1.2rem;font-weight:700;color:var(--text-light);letter-spacing:1px;" id="reg-ref-id">—</span>
+                                    <button type="button" id="btn-copy-ref" onclick="copyRefId()" style="display:none;padding:4px 12px;font-size:0.8rem;background:rgba(197,215,58,0.15);border:1px solid rgba(197,215,58,0.5);border-radius:6px;color:var(--accent);cursor:pointer;font-family:inherit;">
+                                        <i class='bx bx-copy-alt'></i> Copy
+                                    </button>
+                                </div>
+                                <div id="ref-id-hint" style="font-size:0.78rem;color:var(--text-muted);">Generated when you download the invoice or click "Save &amp; Get Reference ID" below</div>
                             </div>
                         </div>
 
@@ -733,7 +738,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=28"></script>
+    <script src="app.js?v=29"></script>
 </body>
 
 </html>

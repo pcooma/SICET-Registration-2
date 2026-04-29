@@ -702,8 +702,7 @@ async function handleRefLookup() {
         populateFormFromData(result.data);
 
         // Show ref ID
-        const refEl = document.getElementById('reg-ref-id');
-        if (refEl) refEl.textContent = refId;
+        showRefId(refId);
 
         // Show step 2 whenever a ref ID exists — user may need to upload payment or resubmit
         if (['Pending Payment', 'Submitted'].includes(result.data.Status)) {
@@ -827,8 +826,7 @@ async function handleStep1(e) {
     if (!ok) return;
 
     // Show the reference ID and reveal Step 2
-    const refEl = document.getElementById('reg-ref-id');
-    if (refEl) refEl.textContent = refId;
+    showRefId(refId);
     const step2 = document.getElementById('step2-section');
     if (step2) step2.classList.remove('hidden');
     step2?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -914,7 +912,13 @@ function generateInvoice() {
 
     const dateObj = new Date();
     const dateStr = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const invoiceNum = 'SICET2026-' + dateObj.getTime().toString().slice(-7);
+    // Reuse existing ref ID (if already generated) so we never create duplicate Drive folders
+    let refId = document.getElementById('reg-ref-id')?.textContent?.trim();
+    if (!refId || refId === '—') {
+        refId = 'SICET2026-' + Date.now().toString().slice(-7);
+    }
+    showRefId(refId);
+    const invoiceNum = refId;
 
     // ---- 2. Build Line Items (single target currency) ----
     const isLocalInv = region === 'Local';
@@ -1229,15 +1233,24 @@ function generateInvoice() {
     const pdfFileName = `SICET2026_Invoice_${invoiceNum}_${safeName}.pdf`;
     doc.save(pdfFileName);
 
-    // Save invoice PDF to Google Drive (async, non-blocking) — always PDF
-    try {
-        const pdfBase64 = doc.output('datauristring').split(',')[1];
-        const refId = document.getElementById('reg-ref-id')?.textContent?.trim() || invoiceNum;
-        const driveName = pdfFileName.endsWith('.pdf') ? pdfFileName : pdfFileName + '.pdf';
-        saveInvoiceToDrive(refId, fullName, driveName, pdfBase64);
-    } catch (_) { /* Drive save is best-effort */ }
+    // Save PDF + registration JSON to Drive so ref ID lookup works (async, non-blocking)
+    if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+        (async () => {
+            try {
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+                saveInvoiceToDrive(refId, fullName, pdfFileName, pdfBase64);
+                const dataObj = collectFormData(refId);
+                if (!dataObj.Status) dataObj.Status = 'Draft';
+                const studentIdInput = document.getElementById('studentId');
+                if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+                await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataObj) });
+            } catch (_) {}
+        })();
+    }
 
-    showToast('Invoice generated and saved to Drive!', 'success');
+    // Scroll to ref ID box so user sees it highlighted
+    document.querySelector('.payment-section.mt-4')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    showToast(`Invoice downloaded! Reference ID: ${refId} — please save this!`, 'success');
 }
 
 async function saveInvoiceToDrive(refId, fullName, fileName, base64Data) {
@@ -1756,6 +1769,38 @@ function updateSubmitButtonState() {
         submitBtn.classList.add('btn-blocked');
         if (submitNote) submitNote.style.display = 'block';
     }
+}
+
+// ---- REFERENCE ID HELPERS ----
+
+function showRefId(refId) {
+    const el = document.getElementById('reg-ref-id');
+    if (el) el.textContent = refId;
+    const btn = document.getElementById('btn-copy-ref');
+    if (btn) btn.style.display = '';
+    const hint = document.getElementById('ref-id-hint');
+    if (hint) hint.textContent = 'Save this ID — you need it to reload your registration or make payment.';
+}
+
+function copyRefId() {
+    const refId = document.getElementById('reg-ref-id')?.textContent?.trim();
+    if (!refId || refId === '—') return;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(refId).then(() => showToast('Reference ID copied!', 'success')).catch(() => fallbackCopy(refId));
+    } else {
+        fallbackCopy(refId);
+    }
+}
+
+function fallbackCopy(text) {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.position = 'fixed';
+    el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.select();
+    try { document.execCommand('copy'); showToast('Reference ID copied!', 'success'); } catch (_) {}
+    document.body.removeChild(el);
 }
 
 // ---- INAUGURATION HELPERS ----
