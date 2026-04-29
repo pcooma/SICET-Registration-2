@@ -20,11 +20,16 @@ const defaultSettings = {
         { id: 'j2', name: 'Scopus Q2', fee: 200 },
         { id: 'j3', name: 'Other', fee: 100 }
     ],
-    pre_conference_sessions: [],    // { id, name, fee_local, fee_saarc, fee_nonsaarc }
+    pre_conference_sessions: [
+        { id: 'pcs1', name: 'AI & Machine Learning Workshop',          fee_local: 3500, fee_saarc: 35, fee_nonsaarc: 50 },
+        { id: 'pcs2', name: 'Cybersecurity Essentials Bootcamp',       fee_local: 4000, fee_saarc: 40, fee_nonsaarc: 60 },
+        { id: 'pcs3', name: 'IoT & Embedded Systems Lab',              fee_local: 3000, fee_saarc: 30, fee_nonsaarc: 45 },
+        { id: 'pcs4', name: 'Research Methodology & Academic Writing', fee_local: 2500, fee_saarc: 25, fee_nonsaarc: 35 }
+    ],
     categories: [
-        { id: 'author',    label: 'Author',     fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250 },
-        { id: 'nonauthor', label: 'Non-Author', fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200 },
-        { id: 'student',   label: 'Student',    fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150 }
+        { id: 'author',    label: 'Author',     fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false },
+        { id: 'nonauthor', label: 'Non-Author', fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true  },
+        { id: 'student',   label: 'Student',    fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150, is_student: true,  no_papers: false }
     ],
     chair_name: 'Dr. Gayashika Fernando',
     refund_deadline: 'August 23, 2025',
@@ -82,6 +87,22 @@ let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
 
 // Initialize
 function init() {
+    // Migrate stored settings: add is_student/no_papers to existing categories
+    let settingsMigrated = false;
+    if (appSettings.categories) {
+        appSettings.categories = appSettings.categories.map(cat => {
+            if ('is_student' in cat && 'no_papers' in cat) return cat;
+            settingsMigrated = true;
+            const ll = (cat.label || '').toLowerCase();
+            return { is_student: ll === 'student', no_papers: ll.includes('non-author') || ll === 'non author', ...cat };
+        });
+    }
+    if (!appSettings.pre_conference_sessions || appSettings.pre_conference_sessions.length === 0) {
+        appSettings.pre_conference_sessions = defaultSettings.pre_conference_sessions;
+        settingsMigrated = true;
+    }
+    if (settingsMigrated) localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+
     updateAdminDashboard();
     populateSettingsForm();
     populateJournalsDropdown();
@@ -144,8 +165,9 @@ function setupEventListeners() {
 
         const hint = document.querySelector('.discount-hint');
         const cat = document.getElementById('attendeeCategory').value;
+        const catDef = (appSettings.categories || []).find(c => c.label === cat);
 
-        if (val > 1 && cat === 'Student') {
+        if (val > 1 && catDef?.is_student) {
             hint.classList.remove('hidden');
         } else {
             hint.classList.add('hidden');
@@ -153,54 +175,48 @@ function setupEventListeners() {
         calculateTotalFee();
     });
 
-    // Category-based field visibility (Author / Non-Author / Student)
+    // Category-based field visibility — driven by is_student / no_papers flags on the category definition
     document.getElementById('attendeeCategory').addEventListener('change', (e) => {
-        const category = e.target.value;
-        const papersSection = document.getElementById('papers-section');
-        const papersContainer = document.getElementById('dynamic-papers-container');
-        const numberOfPapersInput = document.getElementById('numberOfPapers');
-        const studentIdField = document.getElementById('studentId');
-        const studentIdSection = document.getElementById('studentIdSection');
-        const studentRequired = document.querySelector('.student-required');
+        const category      = e.target.value;
+        const catDef        = (appSettings.categories || []).find(c => c.label === category);
+        const isStudentType = catDef?.is_student || false;
+        const isNoPapers    = catDef?.no_papers   || false;
 
-        if (category === 'Non-Author') {
-            // --- Non-Author: hide all paper submission fields ---
+        const papersSection       = document.getElementById('papers-section');
+        const papersContainer     = document.getElementById('dynamic-papers-container');
+        const numberOfPapersInput = document.getElementById('numberOfPapers');
+        const studentIdField      = document.getElementById('studentId');
+        const studentIdSection    = document.getElementById('studentIdSection');
+        const studentRequired     = document.querySelector('.student-required');
+
+        if (isNoPapers) {
+            // No-papers category (e.g. Non-Author): hide papers and student ID
             if (papersSection) papersSection.classList.add('hidden');
             if (papersContainer) papersContainer.classList.add('hidden');
-            if (numberOfPapersInput) {
-                numberOfPapersInput.required = false;
-                numberOfPapersInput.value = 0; // zero papers for pricing
-            }
-            // Also hide student ID
+            if (numberOfPapersInput) { numberOfPapersInput.required = false; numberOfPapersInput.value = 0; }
             if (studentIdSection) studentIdSection.classList.add('hidden');
             if (studentIdField) studentIdField.required = false;
             if (studentRequired) studentRequired.classList.add('hidden');
             hideInauguration();
-
-        } else if (category === 'Student') {
-            // --- Student: show papers + require student ID ---
+        } else if (isStudentType) {
+            // Student-type: show papers + require student ID + show inauguration opt-in
             if (papersSection) papersSection.classList.remove('hidden');
             if (papersContainer) papersContainer.classList.remove('hidden');
             if (numberOfPapersInput) {
                 numberOfPapersInput.required = true;
-                if (!numberOfPapersInput.value || numberOfPapersInput.value === '0') {
-                    numberOfPapersInput.value = 1;
-                }
+                if (!numberOfPapersInput.value || numberOfPapersInput.value === '0') numberOfPapersInput.value = 1;
             }
             if (studentIdSection) studentIdSection.classList.remove('hidden');
             if (studentIdField) studentIdField.required = true;
             if (studentRequired) studentRequired.classList.remove('hidden');
             showInauguration();
-
         } else {
-            // --- Author: show papers, hide student ID ---
+            // Author/default: show papers, hide student ID
             if (papersSection) papersSection.classList.remove('hidden');
             if (papersContainer) papersContainer.classList.remove('hidden');
             if (numberOfPapersInput) {
                 numberOfPapersInput.required = true;
-                if (!numberOfPapersInput.value || numberOfPapersInput.value === '0') {
-                    numberOfPapersInput.value = 1;
-                }
+                if (!numberOfPapersInput.value || numberOfPapersInput.value === '0') numberOfPapersInput.value = 1;
             }
             if (studentIdSection) studentIdSection.classList.add('hidden');
             if (studentIdField) studentIdField.required = false;
@@ -208,9 +224,8 @@ function setupEventListeners() {
             hideInauguration();
         }
 
-        // Re-generate paper blocks for the current count (or clear them)
         const count = parseInt(document.getElementById('numberOfPapers').value) || 0;
-        if (category === 'Non-Author') {
+        if (isNoPapers) {
             document.getElementById('dynamic-papers-container').innerHTML = '';
         } else {
             generatePaperBlocks(count || 1);
@@ -486,6 +501,7 @@ function calculateTotalFee() {
         } else {
             // Resolve base fee from flexible categories list
             const catDef = (appSettings.categories || []).find(c => c.label === category);
+            const isStudent  = catDef?.is_student || false;
             let baseFee = 0;
             let nativeCur = isLocalRegion ? 'LKR' : 'USD';
             if (catDef) {
@@ -493,11 +509,9 @@ function calculateTotalFee() {
             } else {
                 // Fallback: legacy conf_fees lookup
                 const regionKey = region.toLowerCase().replace(/[^a-z]/g, '');
-                const catKey = category === 'Student' ? 'student' : category === 'Non-Author' ? 'nonauthor' : 'author';
+                const catKey = isStudent ? 'student' : (catDef?.no_papers ? 'nonauthor' : 'author');
                 baseFee = (appSettings.conf_fees?.[regionKey]?.[catKey]) || 0;
             }
-
-            const isStudent = category === 'Student';
             const maxP = appSettings.discounts.discount_max_papers || 0;
             const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
             const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
@@ -758,18 +772,20 @@ function generateInvoice() {
         const nativeCur = isLocalInv ? 'LKR' : 'USD';
 
         // Resolve base fee from flexible categories
-        const catDef = (appSettings.categories || []).find(c => c.label === category);
+        const catDef        = (appSettings.categories || []).find(c => c.label === category);
+        const isStudentInv  = catDef?.is_student || false;
+        const isNoPapersInv = catDef?.no_papers   || false;
         let baseFee = 0;
         if (catDef) {
             baseFee = isLocalInv ? catDef.fee_local : (region === 'SAARC' ? catDef.fee_saarc : catDef.fee_nonsaarc);
         } else {
             const rKey = region.toLowerCase().replace(/[^a-z]/g, '');
-            const cKey = category === 'Student' ? 'student' : category === 'Non-Author' ? 'nonauthor' : 'author';
+            const cKey = isStudentInv ? 'student' : (isNoPapersInv ? 'nonauthor' : 'author');
             baseFee = appSettings.conf_fees?.[rKey]?.[cKey] || 0;
         }
 
-        if (category !== 'Non-Author' && papers > 0) {
-            const isStudent = category === 'Student';
+        if (!isNoPapersInv && papers > 0) {
+            const isStudent = isStudentInv;
             const maxP = appSettings.discounts.discount_max_papers || 0;
             const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
             const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
@@ -806,8 +822,8 @@ function generateInvoice() {
             }
             if (paperNotes.length > 0) addItem('  Papers: ' + paperNotes.join(' | '), null, nativeCur);
 
-        } else if (category === 'Non-Author') {
-            addItem(`Conference Registration — ${title} ${fullName} (Non-Author, ${region})`, baseFee, nativeCur);
+        } else if (isNoPapersInv) {
+            addItem(`Conference Registration — ${title} ${fullName} (${category}, ${region})`, baseFee, nativeCur);
         }
 
         // Inauguration opt-in (LKR, student only)
@@ -1041,11 +1057,12 @@ function generateInvoice() {
     const pdfFileName = `SICET2026_Invoice_${invoiceNum}_${safeName}.pdf`;
     doc.save(pdfFileName);
 
-    // Save invoice PDF to Google Drive (async, non-blocking)
+    // Save invoice PDF to Google Drive (async, non-blocking) — always PDF
     try {
         const pdfBase64 = doc.output('datauristring').split(',')[1];
-        const refId = document.getElementById('reg-ref-id')?.textContent || invoiceNum;
-        saveInvoiceToDrive(refId, fullName, pdfFileName, pdfBase64);
+        const refId = document.getElementById('reg-ref-id')?.textContent?.trim() || invoiceNum;
+        const driveName = pdfFileName.endsWith('.pdf') ? pdfFileName : pdfFileName + '.pdf';
+        saveInvoiceToDrive(refId, fullName, driveName, pdfBase64);
     } catch (_) { /* Drive save is best-effort */ }
 
     showToast('Invoice generated and saved to Drive!', 'success');
@@ -1053,6 +1070,8 @@ function generateInvoice() {
 
 async function saveInvoiceToDrive(refId, fullName, fileName, base64Data) {
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+    // Always enforce .pdf extension and correct MIME type for finance use
+    const safeName = fileName.endsWith('.pdf') ? fileName : fileName + '.pdf';
     try {
         await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
@@ -1061,7 +1080,7 @@ async function saveInvoiceToDrive(refId, fullName, fileName, base64Data) {
                 action: 'saveInvoice',
                 Invoice_ID: refId,
                 Full_Name: fullName,
-                invoice_pdf: { name: fileName, mimeType: 'application/pdf', data: base64Data }
+                invoice_pdf: { name: safeName, mimeType: 'application/pdf', data: base64Data }
             })
         });
     } catch (_) { /* silent */ }
@@ -1297,19 +1316,6 @@ function clearData() {
 // ---- ADMIN SETTINGS LOGIC ----
 
 function populateSettingsForm() {
-    // Conf Fees
-    document.getElementById('fee_conf_local_author').value = appSettings.conf_fees.local.author;
-    document.getElementById('fee_conf_local_nonauthor').value = appSettings.conf_fees.local.nonauthor;
-    document.getElementById('fee_conf_local_student').value = appSettings.conf_fees.local.student;
-
-    document.getElementById('fee_conf_saarc_author').value = appSettings.conf_fees.saarc.author;
-    document.getElementById('fee_conf_saarc_nonauthor').value = appSettings.conf_fees.saarc.nonauthor;
-    document.getElementById('fee_conf_saarc_student').value = appSettings.conf_fees.saarc.student;
-
-    document.getElementById('fee_conf_nonsaarc_author').value = appSettings.conf_fees.nonsaarc.author;
-    document.getElementById('fee_conf_nonsaarc_nonauthor').value = appSettings.conf_fees.nonsaarc.nonauthor;
-    document.getElementById('fee_conf_nonsaarc_student').value = appSettings.conf_fees.nonsaarc.student;
-
     document.getElementById('fee_conf_student_discount').value = appSettings.discounts.student_from_2nd;
     document.getElementById('fee_discount_max_papers').value = appSettings.discounts.discount_max_papers || 0;
 
@@ -1369,19 +1375,6 @@ window.removeJournal = function (index) {
 
 function saveSettings(e) {
     e.preventDefault();
-
-    // Gather values
-    appSettings.conf_fees.local.author = Number(document.getElementById('fee_conf_local_author').value);
-    appSettings.conf_fees.local.nonauthor = Number(document.getElementById('fee_conf_local_nonauthor').value);
-    appSettings.conf_fees.local.student = Number(document.getElementById('fee_conf_local_student').value);
-
-    appSettings.conf_fees.saarc.author = Number(document.getElementById('fee_conf_saarc_author').value);
-    appSettings.conf_fees.saarc.nonauthor = Number(document.getElementById('fee_conf_saarc_nonauthor').value);
-    appSettings.conf_fees.saarc.student = Number(document.getElementById('fee_conf_saarc_student').value);
-
-    appSettings.conf_fees.nonsaarc.author = Number(document.getElementById('fee_conf_nonsaarc_author').value);
-    appSettings.conf_fees.nonsaarc.nonauthor = Number(document.getElementById('fee_conf_nonsaarc_nonauthor').value);
-    appSettings.conf_fees.nonsaarc.student = Number(document.getElementById('fee_conf_nonsaarc_student').value);
 
     appSettings.discounts.student_from_2nd  = Number(document.getElementById('fee_conf_student_discount').value);
     appSettings.discounts.discount_max_papers = Number(document.getElementById('fee_discount_max_papers').value) || 0;
@@ -1596,12 +1589,20 @@ function renderCategoriesAdmin() {
     (appSettings.categories || []).forEach((cat, idx) => {
         const div = document.createElement('div');
         div.className = 'category-entry form-group';
-        div.style.cssText = 'display:grid;grid-template-columns:1fr 100px 100px 100px 36px;gap:8px;align-items:end;margin-bottom:8px;';
+        div.style.cssText = 'display:grid;grid-template-columns:1fr 100px 100px 100px auto 36px;gap:8px;align-items:end;margin-bottom:8px;';
         div.innerHTML = `
             <div class="input-field"><label>Label</label><input type="text" class="cat-label" value="${cat.label}" required></div>
             <div class="input-field"><label>Local (LKR)</label><input type="number" class="cat-fee-local" value="${cat.fee_local}" required></div>
             <div class="input-field"><label>SAARC (USD)</label><input type="number" class="cat-fee-saarc" value="${cat.fee_saarc}" required></div>
             <div class="input-field"><label>Non-SAARC (USD)</label><input type="number" class="cat-fee-nonsaarc" value="${cat.fee_nonsaarc}" required></div>
+            <div style="display:flex;flex-direction:column;gap:4px;justify-content:flex-end;padding-bottom:4px;">
+                <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;cursor:pointer;white-space:nowrap;">
+                    <input type="checkbox" class="cat-is-student" ${cat.is_student ? 'checked' : ''}> Student type
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;cursor:pointer;white-space:nowrap;">
+                    <input type="checkbox" class="cat-no-papers" ${cat.no_papers ? 'checked' : ''}> No papers
+                </label>
+            </div>
             <button type="button" class="btn-remove-journal" onclick="removeCategory(${idx})" title="Remove"><i class='bx bx-trash'></i></button>
         `;
         list.appendChild(div);
@@ -1621,19 +1622,23 @@ function addCategoryField() {
 }
 
 function saveCategoriesFromAdmin() {
-    const labels  = document.querySelectorAll('#categories-list .cat-label');
-    const locals  = document.querySelectorAll('#categories-list .cat-fee-local');
-    const saarcs  = document.querySelectorAll('#categories-list .cat-fee-saarc');
-    const nsaarcs = document.querySelectorAll('#categories-list .cat-fee-nonsaarc');
+    const labels     = document.querySelectorAll('#categories-list .cat-label');
+    const locals     = document.querySelectorAll('#categories-list .cat-fee-local');
+    const saarcs     = document.querySelectorAll('#categories-list .cat-fee-saarc');
+    const nsaarcs    = document.querySelectorAll('#categories-list .cat-fee-nonsaarc');
+    const isStudents = document.querySelectorAll('#categories-list .cat-is-student');
+    const nopapers   = document.querySelectorAll('#categories-list .cat-no-papers');
     const cats = [];
     for (let i = 0; i < labels.length; i++) {
         if (labels[i].value.trim()) {
             cats.push({
-                id: appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
-                label: labels[i].value.trim(),
+                id:           appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
+                label:        labels[i].value.trim(),
                 fee_local:    Number(locals[i].value)  || 0,
                 fee_saarc:    Number(saarcs[i].value)  || 0,
-                fee_nonsaarc: Number(nsaarcs[i].value) || 0
+                fee_nonsaarc: Number(nsaarcs[i].value) || 0,
+                is_student:   isStudents[i]?.checked || false,
+                no_papers:    nopapers[i]?.checked   || false
             });
         }
     }

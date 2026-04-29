@@ -574,57 +574,6 @@
 
                 <form id="settings-form" class="settings-grid">
 
-                    <!-- Main Conference Form Config -->
-                    <div class="settings-card">
-                        <h3><i class='bx bx-globe'></i> Main Conference Fees</h3>
-                        <div class="settings-group">
-                            <h4>Local (LKR)</h4>
-                            <div class="form-group row">
-                                <div class="input-field col"><label>Author</label><input type="number"
-                                        id="fee_conf_local_author" required></div>
-                                <div class="input-field col"><label>Non-Author</label><input type="number"
-                                        id="fee_conf_local_nonauthor" required></div>
-                                <div class="input-field col"><label>Student</label><input type="number"
-                                        id="fee_conf_local_student" required></div>
-                            </div>
-                        </div>
-                        <div class="settings-group">
-                            <h4>SAARC (USD)</h4>
-                            <div class="form-group row">
-                                <div class="input-field col"><label>Author</label><input type="number"
-                                        id="fee_conf_saarc_author" required></div>
-                                <div class="input-field col"><label>Non-Author</label><input type="number"
-                                        id="fee_conf_saarc_nonauthor" required></div>
-                                <div class="input-field col"><label>Student</label><input type="number"
-                                        id="fee_conf_saarc_student" required></div>
-                            </div>
-                        </div>
-                        <div class="settings-group">
-                            <h4>Non-SAARC (USD)</h4>
-                            <div class="form-group row">
-                                <div class="input-field col"><label>Author</label><input type="number"
-                                        id="fee_conf_nonsaarc_author" required></div>
-                                <div class="input-field col"><label>Non-Author</label><input type="number"
-                                        id="fee_conf_nonsaarc_nonauthor" required></div>
-                                <div class="input-field col"><label>Student</label><input type="number"
-                                        id="fee_conf_nonsaarc_student" required></div>
-                            </div>
-                        </div>
-                        <div class="settings-group">
-                            <h4>Discounts %</h4>
-                            <div class="form-group row">
-                                <div class="input-field col">
-                                    <label>Student Discount (2nd Paper onwards)</label>
-                                    <input type="number" id="fee_conf_student_discount" min="0" max="100" placeholder="e.g. 10" required>
-                                </div>
-                                <div class="input-field col">
-                                    <label>Max Discounted Papers <small style="color:var(--text-muted);">(0 = unlimited)</small></label>
-                                    <input type="number" id="fee_discount_max_papers" min="0" placeholder="0">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Excursion & Awards Config -->
                     <div class="settings-card">
                         <h3><i class='bx bx-award'></i> Other Registration Fees</h3>
@@ -656,11 +605,24 @@
                     <!-- Attendee Categories Config -->
                     <div class="settings-card full-width">
                         <h3><i class='bx bx-group'></i> Attendee Categories &amp; Fees</h3>
-                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">Define registration categories and their fees per region. The form dropdown is rebuilt automatically when you save.</p>
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">Define registration categories and their fees per region. Check <strong>Student type</strong> to enable student ID upload, inauguration opt-in, and paper discounts. Check <strong>No papers</strong> for non-presenting attendees. The form dropdown rebuilds automatically when you save.</p>
                         <div id="categories-list"></div>
                         <button type="button" id="btn-add-category" class="btn btn-sm btn-primary mt-2">
                             <i class='bx bx-plus'></i> Add Category
                         </button>
+                        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
+                            <h4 style="margin-bottom:12px;font-size:0.95rem;color:var(--text-light);">Student Paper Discounts</h4>
+                            <div class="form-group row">
+                                <div class="input-field col">
+                                    <label>Student Discount (2nd Paper onwards, %)</label>
+                                    <input type="number" id="fee_conf_student_discount" min="0" max="100" placeholder="e.g. 10" required>
+                                </div>
+                                <div class="input-field col">
+                                    <label>Max Discounted Papers <small style="color:var(--text-muted);">(0 = unlimited)</small></label>
+                                    <input type="number" id="fee_discount_max_papers" min="0" placeholder="0">
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Pre-Conference Sessions Config -->
@@ -735,7 +697,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
 </body>
 
 </html>
