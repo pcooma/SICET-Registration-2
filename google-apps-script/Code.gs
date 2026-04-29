@@ -72,6 +72,17 @@ function doGet(e) {
     }
   }
 
+  if (action === 'getRegistrationByRef') {
+    const ref = (e.parameter && e.parameter.ref) || '';
+    if (!ref) return jsonResponse({ error: 'No reference ID provided' });
+    try {
+      const data = getRegistrationByRef(ref);
+      return jsonResponse({ success: true, data: data });
+    } catch (err) {
+      return jsonResponse({ success: false, error: err.toString() });
+    }
+  }
+
   return jsonResponse({ status: 'SICET 2026 Registration API running' });
 }
 
@@ -266,6 +277,21 @@ function getSubmissionsFromSheet(mainFolder) {
     headers.forEach((h, i) => { obj[h] = row[i]; });
     return obj;
   });
+}
+
+function getRegistrationByRef(refId) {
+  const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+  const folders = mainFolder.getFolders();
+  while (folders.hasNext()) {
+    const folder = folders.next();
+    if (folder.getName().startsWith(refId + '_')) {
+      const files = folder.getFilesByName('registration_data.json');
+      if (files.hasNext()) {
+        return JSON.parse(files.next().getBlob().getDataAsString());
+      }
+    }
+  }
+  throw new Error('No registration found for Reference ID: ' + refId);
 }
 
 function generateInvoiceId() {

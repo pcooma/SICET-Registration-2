@@ -436,6 +436,18 @@
                             </p>
                         </div>
 
+                        <!-- Returning Registrant Lookup -->
+                        <div class="highlight-box" style="background:rgba(100,100,100,0.06);border:1px solid rgba(255,255,255,0.12);margin-bottom:18px;padding:14px 18px;">
+                            <h4 style="color:var(--text-light);margin-bottom:8px;font-size:0.93rem;"><i class='bx bx-history' style="margin-right:6px;color:var(--accent);"></i>Already Registered? Reload Your Submission</h4>
+                            <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:10px;">Enter your Reference ID below to reload your previously saved registration details and continue where you left off.</p>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <input type="text" id="lookup-ref-id" placeholder="E.g. SICET2026-1234567" style="flex:1;min-width:180px;padding:9px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:var(--text-light);font-size:0.9rem;outline:none;">
+                                <button type="button" id="btn-lookup-ref" class="btn btn-secondary btn-sm" style="white-space:nowrap;">
+                                    <i class='bx bx-search'></i> Load Registration
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Ref ID display -->
                         <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:14px 18px;background:rgba(197,215,58,0.08);border:1px solid rgba(197,215,58,0.3);border-radius:8px;">
                             <i class='bx bx-id-card' style="font-size:1.6rem;color:var(--accent);flex-shrink:0;"></i>
@@ -718,7 +730,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=26"></script>
+    <script src="app.js?v=27"></script>
 </body>
 
 </html>

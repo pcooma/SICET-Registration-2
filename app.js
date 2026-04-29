@@ -331,6 +331,9 @@ function setupEventListeners() {
     // Invoice download
     document.getElementById('btn-download-invoice').addEventListener('click', generateInvoice);
 
+    // Returning registrant — lookup by ref ID
+    document.getElementById('btn-lookup-ref')?.addEventListener('click', handleRefLookup);
+
     // Step 1 — Save & get ref ID
     document.getElementById('btn-step1')?.addEventListener('click', handleStep1);
 
@@ -413,7 +416,7 @@ function generatePaperBlocks(count) {
                     <input type="text" id="paperTitle_${i}" name="Paper_${i}_Title" placeholder="Enter paper title" required>
                 </div>
             </div>
-            <div class="form-checkbox mb-2" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
+            <div class="form-checkbox mb-2${apcActive ? '' : ' hidden'}" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
                 <input type="checkbox" id="includeApc_${i}" name="Paper_${i}_Include_APC" class="apc-toggle price-trigger" data-target="apc-details-${i}">
                 <label for="includeApc_${i}" style="margin-left: 8px;">Include APC (Article Processing Charge) for this paper?</label>
             </div>
@@ -657,6 +660,97 @@ function collectFormData(refId) {
     if (document.getElementById('togglePreConf')?.checked)   typesArr.push('Pre-Conference Sessions');
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
     return dataObj;
+}
+
+// ---- RETURNING REGISTRANT LOOKUP ----
+
+async function handleRefLookup() {
+    const refId = document.getElementById('lookup-ref-id')?.value?.trim();
+    if (!refId) { showToast('Please enter your Reference ID.', 'error'); return; }
+
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+        showToast('Google Drive not configured.', 'error'); return;
+    }
+
+    const btn = document.getElementById('btn-lookup-ref');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bx bx-loader bx-spin"></i> Loading…'; }
+
+    try {
+        const url = APPS_SCRIPT_URL + '?action=getRegistrationByRef&ref=' + encodeURIComponent(refId);
+        const res = await fetch(url);
+        const result = await res.json();
+
+        if (!result.success || !result.data) {
+            showToast('Reference ID not found. Please check and try again.', 'error');
+            return;
+        }
+
+        populateFormFromData(result.data);
+
+        const refEl = document.getElementById('reg-ref-id');
+        if (refEl) refEl.textContent = refId;
+
+        if (result.data.Status === 'Submitted') {
+            document.getElementById('step2-section')?.classList.remove('hidden');
+        }
+
+        showToast(`Registration loaded for ${result.data.Full_Name || refId}`, 'success');
+        document.getElementById('reg-ref-id')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+        showToast('Could not connect to server. Please check your connection and try again.', 'error');
+        console.error('Ref lookup error:', err);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bx bx-search"></i> Load Registration'; }
+    }
+}
+
+function populateFormFromData(data) {
+    // 1. Registration type toggles first so sections appear
+    const typeKeyMap = {
+        'Main':                  'Registering_Main',
+        'Award':                 'Registering_Award',
+        'Excursion':             'Registering_Excursion',
+        'Pre-Conference':        'Registering_PreConf'
+    };
+    const regType = data.Registration_Type || '';
+    Object.entries(typeKeyMap).forEach(([key, name]) => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el && regType.includes(key)) {
+            el.checked = true;
+            el.dispatchEvent(new Event('change'));
+        }
+    });
+
+    // 2. Generate paper blocks before populating paper fields
+    const numPapers = parseInt(data.Number_of_Papers) || 1;
+    const numPapersEl = document.getElementById('numberOfPapers');
+    if (numPapersEl && !isNaN(parseInt(data.Number_of_Papers))) {
+        numPapersEl.value = numPapers;
+        generatePaperBlocks(numPapers);
+    }
+
+    // 3. Populate all text / select fields by matching the data key to the form field name
+    const skip = new Set([
+        'Registration_Type', 'Number_of_Papers', 'Calculated_Total_Fee', 'Currency',
+        'Submission_Date', 'Invoice_ID', 'Status', 'Drive_Folder_URL',
+        'Student_ID_Base64', 'Payment_Proof_Base64', 'action'
+    ]);
+    Object.entries(data).forEach(([key, value]) => {
+        if (skip.has(key) || value === '' || value == null) return;
+        const el = registrationForm.querySelector(`[name="${key}"]`);
+        if (el && el.type !== 'file' && el.type !== 'checkbox') {
+            el.value = value;
+        }
+    });
+
+    // 4. Trigger change events so dependent visibility logic fires
+    const regionEl = document.getElementById('attendeeRegion');
+    if (regionEl && regionEl.value) regionEl.dispatchEvent(new Event('change'));
+
+    const catEl = document.getElementById('attendeeCategory');
+    if (catEl && catEl.value) catEl.dispatchEvent(new Event('change'));
+
+    calculateTotalFee();
 }
 
 // STEP 1 — Save draft + get Ref ID (no payment proof required)
@@ -964,7 +1058,8 @@ function generateInvoice() {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
     doc.text('Sri Lanka Institute of Information Technology', L, issuerY); issuerY += 4;
     doc.text('New Kandy Road, Malabe, Sri Lanka', L, issuerY); issuerY += 4;
-    doc.text('Email: sicet@sliit.lk', L, issuerY); issuerY += 4;
+    doc.text('Email: sicet@sliit.lk or info@sliit.lk', L, issuerY); issuerY += 4;
+    doc.text('Tel: 011 754 4801', L, issuerY); issuerY += 4;
 
     // Bill To column
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(0, 0, 0);
