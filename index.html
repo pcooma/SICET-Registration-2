@@ -594,10 +594,17 @@
                             </div>
                         </div>
                         <div class="settings-group">
-                            <h4>Inauguration Ceremony (LKR)</h4>
-                            <div class="form-group">
-                                <label>Fee for Student opt-in <small style="color:var(--text-muted);">(0 = disabled)</small></label>
-                                <input type="number" id="fee_inauguration" min="0" placeholder="0" style="max-width:200px;">
+                            <h4>Inauguration Ceremony — Student Opt-in</h4>
+                            <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:8px;">Applies only to student-type attendees. Set 0 to disable the option entirely.</p>
+                            <div class="form-group row">
+                                <div class="input-field col">
+                                    <label>Local Fee (LKR) <small style="color:var(--text-muted);">(0 = disabled)</small></label>
+                                    <input type="number" id="fee_inauguration" min="0" placeholder="0">
+                                </div>
+                                <div class="input-field col">
+                                    <label>Non-Local Fee (USD) <small style="color:var(--text-muted);">(0 = disabled)</small></label>
+                                    <input type="number" id="fee_inauguration_usd" min="0" placeholder="0">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -697,7 +704,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=24"></script>
 </body>
 
 </html>

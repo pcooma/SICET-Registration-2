@@ -14,7 +14,8 @@ const defaultSettings = {
         local: 15000,
         foreigner: 17000
     },
-    inauguration_fee: 0,            // LKR; 0 = disabled; Student opt-in only
+    inauguration_fee: 10000,         // LKR; Student opt-in only (Local)
+    inauguration_fee_usd: 30,       // USD; Student opt-in only (Non-local)
     journals: [
         { id: 'j1', name: 'Scopus Q1', fee: 300 },
         { id: 'j2', name: 'Scopus Q2', fee: 200 },
@@ -99,6 +100,13 @@ function init() {
     }
     if (!appSettings.pre_conference_sessions || appSettings.pre_conference_sessions.length === 0) {
         appSettings.pre_conference_sessions = defaultSettings.pre_conference_sessions;
+        settingsMigrated = true;
+    }
+    // Migrate inauguration_fee_usd (new field — old data won't have it)
+    if (!('inauguration_fee_usd' in appSettings)) {
+        appSettings.inauguration_fee_usd = defaultSettings.inauguration_fee_usd;
+        // Also set LKR default if it was still at the old 0 placeholder
+        if (appSettings.inauguration_fee === 0) appSettings.inauguration_fee = defaultSettings.inauguration_fee;
         settingsMigrated = true;
     }
     if (settingsMigrated) localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
@@ -545,12 +553,16 @@ function calculateTotalFee() {
             }
         });
 
-        // Inauguration opt-in (LKR)
+        // Inauguration opt-in — LKR for local, USD for non-local
         const inaugCheck = document.getElementById('includeInauguration');
-        if (inaugCheck?.checked && appSettings.inauguration_fee > 0) {
-            const disp = toDisplay(appSettings.inauguration_fee, 'LKR');
-            displayTotal += disp;
-            br(); breakdownText += `<span>Inauguration Ceremony:</span><span>${disp} ${displayCur}</span>`;
+        if (inaugCheck?.checked) {
+            const inaugFee = isLocalRegion ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
+            const inaugCur = isLocalRegion ? 'LKR' : 'USD';
+            if (inaugFee > 0) {
+                const disp = toDisplay(inaugFee, inaugCur);
+                displayTotal += disp;
+                br(); breakdownText += `<span>Inauguration Ceremony:</span><span>${disp} ${displayCur}</span>`;
+            }
         }
 
         // Pre-conference sessions
@@ -826,10 +838,12 @@ function generateInvoice() {
             addItem(`Conference Registration — ${title} ${fullName} (${category}, ${region})`, baseFee, nativeCur);
         }
 
-        // Inauguration opt-in (LKR, student only)
+        // Inauguration opt-in — LKR for local, USD for non-local
         const inaugCheck = document.getElementById('includeInauguration');
-        if (inaugCheck?.checked && appSettings.inauguration_fee > 0) {
-            addItem('Inauguration Ceremony (opt-in)', appSettings.inauguration_fee, 'LKR');
+        if (inaugCheck?.checked) {
+            const inaugFee = isLocalInv ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
+            const inaugCur = isLocalInv ? 'LKR' : 'USD';
+            if (inaugFee > 0) addItem('Inauguration Ceremony (opt-in)', inaugFee, inaugCur);
         }
 
         // Pre-conference sessions
@@ -1322,6 +1336,7 @@ function populateSettingsForm() {
     // Awards & Excursion
     document.getElementById('fee_award_base').value = appSettings.award_fee;
     document.getElementById('fee_inauguration').value = appSettings.inauguration_fee || 0;
+    document.getElementById('fee_inauguration_usd').value = appSettings.inauguration_fee_usd || 0;
     document.getElementById('fee_excursion_local').value = appSettings.excursion_fees.local;
     document.getElementById('fee_excursion_foreigner').value = appSettings.excursion_fees.foreigner;
 
@@ -1381,6 +1396,7 @@ function saveSettings(e) {
 
     appSettings.award_fee = Number(document.getElementById('fee_award_base').value);
     appSettings.inauguration_fee = Number(document.getElementById('fee_inauguration').value) || 0;
+    appSettings.inauguration_fee_usd = Number(document.getElementById('fee_inauguration_usd').value) || 0;
     appSettings.excursion_fees.local = Number(document.getElementById('fee_excursion_local').value);
     appSettings.excursion_fees.foreigner = Number(document.getElementById('fee_excursion_foreigner').value);
 
@@ -1570,7 +1586,8 @@ function updateSubmitButtonState() {
 // ---- INAUGURATION HELPERS ----
 function showInauguration() {
     const s = document.getElementById('inauguration-section');
-    if (s && appSettings.inauguration_fee > 0) s.classList.remove('hidden');
+    const hasInaugFee = (appSettings.inauguration_fee > 0) || ((appSettings.inauguration_fee_usd || 0) > 0);
+    if (s && hasInaugFee) s.classList.remove('hidden');
 }
 function hideInauguration() {
     const s = document.getElementById('inauguration-section');
