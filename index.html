@@ -10,7 +10,7 @@
         rel="stylesheet">
     <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=11">
+    <link rel="stylesheet" href="style.css?v=12">
 </head>
 
 <body>
@@ -215,6 +215,22 @@
                             <input type="file" id="studentId" name="Student_ID_File" accept="image/*,.pdf">
                             <small class="helper-text">Maximum file size: 5MB (JPEG, PNG, PDF)</small>
                         </div>
+
+                        <!-- Inauguration Ceremony opt-in (Student only) -->
+                        <div id="inauguration-section" class="form-group highlight-box hidden" style="margin-top:12px;background:rgba(74,104,255,0.07);border:1px solid rgba(74,104,255,0.25);">
+                            <p style="margin:0 0 10px;color:var(--text-muted);font-size:0.9rem;"><i class='bx bx-calendar-event' style="color:var(--accent);margin-right:6px;"></i>Student registrations do not include the Inauguration Ceremony by default. You may opt in for an additional fee.</p>
+                            <div class="form-checkbox">
+                                <input type="checkbox" id="includeInauguration" name="Include_Inauguration" class="price-trigger">
+                                <label for="includeInauguration">I would like to attend the Inauguration Ceremony</label>
+                            </div>
+                        </div>
+
+                        <!-- Pre-Conference Sessions (dynamic) -->
+                        <div id="preconf-sessions-section" class="hidden" style="margin-top:16px;">
+                            <h4 style="color:var(--accent);margin-bottom:10px;font-size:1rem;"><i class='bx bx-notepad' style="margin-right:6px;"></i>Pre-Conference Sessions</h4>
+                            <p style="color:var(--text-muted);font-size:0.88rem;margin-bottom:10px;">Optional add-on sessions available before the main conference.</p>
+                            <div id="preconf-sessions-container"></div>
+                        </div>
                     </div>
 
                     <!-- Dynamic Papers Container - hidden for Non-Authors -->
@@ -389,13 +405,12 @@
                         </div>
                     </div>
 
-                    <!-- Payment & Submission — always visible so users know what is needed -->
+                    <!-- STEP 1 — Save & Get Reference ID -->
                     <div class="payment-section mt-4">
-                        <h3 class="section-title">Payment &amp; Submission</h3>
+                        <h3 class="section-title"><strong style="color:var(--accent);">Step 1</strong> — Save Registration &amp; Get Reference ID</h3>
 
-                        <!-- Payment Method & Policy Notice -->
                         <div class="highlight-box" style="background:rgba(0,120,200,0.06);border:1px solid rgba(0,150,255,0.25);margin-bottom:18px;padding:14px 18px;">
-                            <h4 style="color:#4a9eff;margin-bottom:10px;font-size:0.93rem;"><i class='bx bx-info-circle' style="margin-right:6px;"></i>Payment Methods &amp; Policies — Please Read Before Paying</h4>
+                            <h4 style="color:#4a9eff;margin-bottom:10px;font-size:0.93rem;"><i class='bx bx-info-circle' style="margin-right:6px;"></i>Payment Methods &amp; Policies</h4>
                             <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:0.87rem;line-height:2;">
                                 <li><strong style="color:var(--text-light);">Direct Deposit:</strong> Available for local (Sri Lanka) attendees only.</li>
                                 <li><strong style="color:var(--text-light);">Wire Transfer:</strong> Payment must be received within 30 days of registration.</li>
@@ -405,45 +420,62 @@
                         </div>
 
                         <div class="highlight-box" style="background:rgba(197,215,58,0.06);border:1px dashed rgba(197,215,58,0.35);margin-bottom:20px;padding:16px 20px;">
-                            <p style="margin:0;color:var(--text-muted);font-size:0.93rem;line-height:2;">
+                            <p style="margin:0;color:var(--text-muted);font-size:0.93rem;line-height:2.2;">
                                 <i class='bx bx-list-check' style="color:var(--accent);margin-right:6px;vertical-align:middle;"></i>
-                                <strong style="color:var(--text-light);">Steps to complete your registration:</strong><br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">①</strong> Select your registration type(s) above and fill in all required details.<br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">②</strong> Download the <strong style="color:var(--accent);">Proforma Invoice</strong> (appears above once type is selected) to see your total fee.<br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">③</strong> Make payment at the SLIIT portal following the instructions below.<br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">④</strong> Upload your payment receipt below and click <strong>Submit Registration</strong> to confirm.
+                                <strong style="color:var(--text-light);">How to complete your registration:</strong><br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">①</strong> Fill in all details above and download the Proforma Invoice.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">②</strong> Click <strong style="color:var(--accent);">"Save &amp; Get Reference ID"</strong> — your details are saved and a unique Reference ID is issued.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">③</strong> Make payment using the instructions below. Use your Reference ID as the payment description.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">④</strong> Upload your receipt in <strong>Step 2</strong> below and click <strong>Submit Registration</strong>.
                             </p>
                         </div>
 
-                        <!-- Payment Instructions -->
-                            <div class="highlight-box" style="margin-bottom:20px;">
-                                <h4 style="color:var(--accent);margin-bottom:12px;"><i class='bx bx-credit-card' style="margin-right:6px;"></i>How to Make Your Payment</h4>
-                                <ol style="margin:0;padding-left:1.4rem;color:var(--text-light);line-height:2;">
-                                    <li>Visit the SLIIT payment portal: <a href="https://pay.sliit.lk/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;">https://pay.sliit.lk/</a></li>
-                                    <li>Under <strong style="color:var(--accent);">Purpose of Payment</strong>, select <strong>"Any other payment"</strong> from the dropdown.</li>
-                                    <li>In the <strong style="color:var(--accent);">Description</strong> field, enter: <strong>"SICET 2026"</strong></li>
-                                    <li>Complete the payment and save your transaction receipt.</li>
-                                    <li>Upload the receipt and enter the Transaction Reference Number below.</li>
-                                </ol>
+                        <!-- Ref ID display -->
+                        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:14px 18px;background:rgba(197,215,58,0.08);border:1px solid rgba(197,215,58,0.3);border-radius:8px;">
+                            <i class='bx bx-id-card' style="font-size:1.6rem;color:var(--accent);flex-shrink:0;"></i>
+                            <div>
+                                <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:2px;">Your Registration Reference ID</div>
+                                <div style="font-size:1.2rem;font-weight:700;color:var(--text-light);letter-spacing:1px;" id="reg-ref-id">—</div>
+                                <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">Generated when you click "Save &amp; Get Reference ID" below</div>
                             </div>
+                        </div>
 
-                            <div class="form-group row">
-                                <div class="input-field col">
-                                    <label for="paymentProof">Upload Proof of Payment <span class="required">*</span></label>
-                                    <input type="file" id="paymentProof" name="Payment_Proof" accept="image/*,.pdf"
-                                        class="file-input">
-                                    <small class="helper-text">After completing payment, download the receipt or take a screenshot and upload it here. Accepted formats: JPEG, PNG, PDF (max 5MB).</small>
-                                </div>
-                                <div class="input-field col">
-                                    <label for="transRef">Transaction Reference Number</label>
-                                    <input type="text" id="transRef" name="Transaction_Ref"
-                                        placeholder="E.g. REF12345678">
-                                </div>
+                        <div class="form-group">
+                            <label for="additionalInfo">Additional Notes or Special Requirements</label>
+                            <textarea id="additionalInfo" name="Additional_Info" rows="2"
+                                placeholder="Any special requirements, accessibility needs, or additional information..."></textarea>
+                        </div>
+
+                        <button type="button" class="btn btn-primary" id="btn-step1" style="width:100%;padding:13px;font-size:1rem;justify-content:center;margin-bottom:10px;">
+                            <span>Save &amp; Get Reference ID</span>
+                            <i class='bx bx-save'></i>
+                        </button>
+                    </div>
+
+                    <!-- STEP 2 — Upload Payment Proof & Submit -->
+                    <div id="step2-section" class="payment-section mt-4 hidden">
+                        <h3 class="section-title"><strong style="color:var(--accent);">Step 2</strong> — Upload Payment &amp; Submit</h3>
+
+                        <div class="highlight-box" style="margin-bottom:20px;">
+                            <h4 style="color:var(--accent);margin-bottom:12px;"><i class='bx bx-credit-card' style="margin-right:6px;"></i>How to Make Your Payment</h4>
+                            <ol style="margin:0;padding-left:1.4rem;color:var(--text-light);line-height:2;">
+                                <li>Visit the SLIIT payment portal: <a href="https://pay.sliit.lk/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;">https://pay.sliit.lk/</a></li>
+                                <li>Under <strong style="color:var(--accent);">Purpose of Payment</strong>, select <strong>"Any other payment"</strong>.</li>
+                                <li>In the <strong style="color:var(--accent);">Description</strong> field, enter your <strong>Reference ID</strong> (shown above).</li>
+                                <li>Complete the payment and save your transaction receipt.</li>
+                                <li>Upload the receipt below and click Submit.</li>
+                            </ol>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="input-field col">
+                                <label for="paymentProof">Upload Proof of Payment <span class="required">*</span></label>
+                                <input type="file" id="paymentProof" name="Payment_Proof" accept="image/*,.pdf" class="file-input">
+                                <small class="helper-text">JPEG, PNG, or PDF — max 5MB</small>
                             </div>
-                            <div class="form-group">
-                                <label for="additionalInfo">Additional Notes or Special Requirements</label>
-                                <textarea id="additionalInfo" name="Additional_Info" rows="2"
-                                    placeholder="Any special requirements, accessibility needs, or additional information..."></textarea>
+                            <div class="input-field col">
+                                <label for="transRef">Transaction Reference Number</label>
+                                <input type="text" id="transRef" name="Transaction_Ref" placeholder="E.g. REF12345678">
                             </div>
                         </div>
 
@@ -456,6 +488,7 @@
                                 <i class='bx bx-error-circle'></i> Upload your proof of payment above to enable submission.
                             </p>
                         </div>
+                    </div>
                 </form>
             </div>
         </section>
@@ -579,17 +612,22 @@
                         </div>
                         <div class="settings-group">
                             <h4>Discounts %</h4>
-                            <div class="form-group">
-                                <label>Student Discount (2nd Paper onwards)</label>
-                                <input type="number" id="fee_conf_student_discount" min="0" max="100"
-                                    placeholder="e.g. 10" required>
+                            <div class="form-group row">
+                                <div class="input-field col">
+                                    <label>Student Discount (2nd Paper onwards)</label>
+                                    <input type="number" id="fee_conf_student_discount" min="0" max="100" placeholder="e.g. 10" required>
+                                </div>
+                                <div class="input-field col">
+                                    <label>Max Discounted Papers <small style="color:var(--text-muted);">(0 = unlimited)</small></label>
+                                    <input type="number" id="fee_discount_max_papers" min="0" placeholder="0">
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Excursion & Awards Config -->
                     <div class="settings-card">
-                        <h3><i class='bx bx-award'></i> Awards & Excursion</h3>
+                        <h3><i class='bx bx-award'></i> Other Registration Fees</h3>
                         <div class="settings-group">
                             <h4>Excellence Award (LKR)</h4>
                             <div class="form-group">
@@ -606,6 +644,33 @@
                                         id="fee_excursion_foreigner" required></div>
                             </div>
                         </div>
+                        <div class="settings-group">
+                            <h4>Inauguration Ceremony (LKR)</h4>
+                            <div class="form-group">
+                                <label>Fee for Student opt-in <small style="color:var(--text-muted);">(0 = disabled)</small></label>
+                                <input type="number" id="fee_inauguration" min="0" placeholder="0" style="max-width:200px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Attendee Categories Config -->
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bx-group'></i> Attendee Categories &amp; Fees</h3>
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">Define registration categories and their fees per region. The form dropdown is rebuilt automatically when you save.</p>
+                        <div id="categories-list"></div>
+                        <button type="button" id="btn-add-category" class="btn btn-sm btn-primary mt-2">
+                            <i class='bx bx-plus'></i> Add Category
+                        </button>
+                    </div>
+
+                    <!-- Pre-Conference Sessions Config -->
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bx-notepad'></i> Pre-Conference Sessions</h3>
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">Add optional sessions that attendees can select. Leave empty to hide from the form.</p>
+                        <div id="sessions-list"></div>
+                        <button type="button" id="btn-add-session" class="btn btn-sm btn-primary mt-2">
+                            <i class='bx bx-plus'></i> Add Session
+                        </button>
                     </div>
 
                     <!-- APC Journals Config -->
@@ -670,7 +735,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=22"></script>
 </body>
 
 </html>

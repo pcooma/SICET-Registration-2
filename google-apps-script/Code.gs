@@ -8,136 +8,166 @@
  * 4. Click Deploy → New deployment → Web app
  *    - Execute as: Me
  *    - Who has access: Anyone
- * 5. Authorise the script (it needs Drive + Sheets access)
- * 6. Copy the Web App URL
- * 7. Paste the URL into APPS_SCRIPT_URL in app.js
- * 8. Also paste your ADMIN_KEY into ADMIN_KEY in app.js
+ * 5. Authorise the script (Drive + Sheets access required)
+ * 6. Copy the Web App URL and paste into APPS_SCRIPT_URL in app.js
  *
- * Google Drive folder structure created automatically:
- *   SICET 2026 Registrations/  (the shared folder you created)
- *   ├── SICET2026 Master Registrations  (Google Sheet — all entries)
- *   ├── SICET2026-XXXXXXX_LastName/     (one folder per registrant)
+ * Drive folder structure:
+ *   SICET 2026 Registrations/
+ *   ├── SICET2026 Master Registrations  (Google Sheet)
+ *   ├── SICET2026-XXXXXXX_LastName/
  *   │   ├── registration_data.json
- *   │   ├── student_id_<filename>       (if uploaded)
- *   │   └── payment_proof_<filename>    (if uploaded)
- *   └── ...
+ *   │   ├── invoice_v1.pdf, invoice_v2.pdf …  (versioned proforma invoices)
+ *   │   ├── student_id_<filename>
+ *   │   └── payment_proof_<filename>
+ *   └── …
  */
 
-const MAIN_FOLDER_ID = '1REXNutSF3mzO7tRkg0tD0GjLqjUlhI-n';
+const MAIN_FOLDER_ID    = '1REXNutSF3mzO7tRkg0tD0GjLqjUlhI-n';
 const MASTER_SHEET_NAME = 'SICET2026 Master Registrations';
-const ADMIN_KEY = 'sicet2026admin'; // Change this to something secret
+const ADMIN_KEY         = 'sicet2026admin'; // Change this to something secret
 
 // ---------------------------------------------------------------------------
-// POST — receives form submission from the frontend
+// POST — handles all write actions from the frontend
 // ---------------------------------------------------------------------------
 function doPost(e) {
+  // Use LockService to prevent concurrent writes corrupting the sheet
+  const lock = LockService.getScriptLock();
   try {
-    const data = JSON.parse(e.postData.contents);
-    const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+    lock.waitLock(15000); // wait up to 15 s
+  } catch (_) {
+    return jsonResponse({ success: false, error: 'Server busy — please retry in a moment.' });
+  }
 
-    // Ensure Invoice ID exists
-    if (!data.Invoice_ID) {
-      data.Invoice_ID = generateInvoiceId();
+  try {
+    const data   = JSON.parse(e.postData.contents);
+    const action = data.action || 'submitRegistration';
+
+    if (action === 'saveInvoice') {
+      return handleSaveInvoice(data);
     }
 
-    // Build user folder name: InvoiceID_LastName
-    const nameParts = (data.Full_Name || 'Unknown').trim().split(/\s+/);
-    const lastName = nameParts[nameParts.length - 1].replace(/[^a-zA-Z0-9]/g, '') || 'Attendee';
-    const folderName = data.Invoice_ID + '_' + lastName;
-
-    const userFolder = mainFolder.createFolder(folderName);
-    const folderUrl = userFolder.getUrl();
-
-    // Save uploaded files from base64
-    if (data.Student_ID_Base64 && data.Student_ID_Base64.data) {
-      const f = data.Student_ID_Base64;
-      const blob = Utilities.newBlob(
-        Utilities.base64Decode(f.data),
-        f.mimeType || 'application/octet-stream',
-        'student_id_' + (f.name || 'file')
-      );
-      userFolder.createFile(blob);
-      data.Student_ID_Base64 = '(uploaded — see folder)';
-    }
-
-    if (data.Payment_Proof_Base64 && data.Payment_Proof_Base64.data) {
-      const f = data.Payment_Proof_Base64;
-      const blob = Utilities.newBlob(
-        Utilities.base64Decode(f.data),
-        f.mimeType || 'application/octet-stream',
-        'payment_proof_' + (f.name || 'file')
-      );
-      userFolder.createFile(blob);
-      data.Payment_Proof_Base64 = '(uploaded — see folder)';
-    }
-
-    // Attach folder URL to data record
-    data.Drive_Folder_URL = folderUrl;
-
-    // Save full JSON snapshot to user folder
-    userFolder.createFile(
-      'registration_data.json',
-      JSON.stringify(data, null, 2),
-      MimeType.PLAIN_TEXT
-    );
-
-    // Append summary row to master sheet
-    appendToMasterSheet(data, mainFolder, folderUrl);
-
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        success: true,
-        invoiceId: data.Invoice_ID,
-        folderUrl: folderUrl
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
-
+    return handleSubmitRegistration(data);
   } catch (err) {
     Logger.log('doPost error: ' + err.toString());
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse({ success: false, error: err.toString() });
+  } finally {
+    lock.releaseLock();
   }
 }
 
 // ---------------------------------------------------------------------------
-// GET — admin reads all submissions (requires key param)
+// GET — admin reads + health check
 // ---------------------------------------------------------------------------
 function doGet(e) {
   const action = (e.parameter && e.parameter.action) || '';
   const key    = (e.parameter && e.parameter.key)    || '';
 
   if (action === 'getSubmissions') {
-    if (key !== ADMIN_KEY) {
-      return ContentService
-        .createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
+    if (key !== ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' });
     try {
       const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
-      const rows = getSubmissionsFromSheet(mainFolder);
-      return ContentService
-        .createTextOutput(JSON.stringify({ success: true, submissions: rows }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ success: true, submissions: getSubmissionsFromSheet(mainFolder) });
     } catch (err) {
-      return ContentService
-        .createTextOutput(JSON.stringify({ error: err.toString() }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ error: err.toString() });
     }
   }
 
-  // Health check
-  return ContentService
-    .createTextOutput(JSON.stringify({ status: 'SICET 2026 Registration API running' }))
-    .setMimeType(ContentService.MimeType.JSON);
+  return jsonResponse({ status: 'SICET 2026 Registration API running' });
+}
+
+// ---------------------------------------------------------------------------
+// handleSubmitRegistration — create or upsert a registration record
+// ---------------------------------------------------------------------------
+function handleSubmitRegistration(data) {
+  const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+
+  // Server-side unique ID if not supplied
+  if (!data.Invoice_ID) {
+    data.Invoice_ID = generateInvoiceId();
+  }
+
+  const nameParts = (data.Full_Name || 'Unknown').trim().split(/\s+/);
+  const lastName  = nameParts[nameParts.length - 1].replace(/[^a-zA-Z0-9]/g, '') || 'Attendee';
+  const folderName = data.Invoice_ID + '_' + lastName;
+
+  // Find or create the registrant's sub-folder
+  let userFolder;
+  const existingFolders = mainFolder.getFoldersByName(folderName);
+  if (existingFolders.hasNext()) {
+    userFolder = existingFolders.next();
+  } else {
+    userFolder = mainFolder.createFolder(folderName);
+  }
+
+  const folderUrl = userFolder.getUrl();
+
+  // Save uploaded files
+  if (data.Student_ID_Base64 && data.Student_ID_Base64.data) {
+    saveFileToFolder(userFolder, 'student_id_', data.Student_ID_Base64);
+    data.Student_ID_Base64 = '(uploaded — see folder)';
+  }
+  if (data.Payment_Proof_Base64 && data.Payment_Proof_Base64.data) {
+    saveFileToFolder(userFolder, 'payment_proof_', data.Payment_Proof_Base64);
+    data.Payment_Proof_Base64 = '(uploaded — see folder)';
+  }
+
+  data.Drive_Folder_URL = folderUrl;
+
+  // Overwrite registration_data.json with latest version
+  deleteFilesByName(userFolder, 'registration_data.json');
+  userFolder.createFile('registration_data.json', JSON.stringify(data, null, 2), MimeType.PLAIN_TEXT);
+
+  // Upsert row in master sheet
+  upsertMasterSheet(data, mainFolder, folderUrl);
+
+  return jsonResponse({ success: true, invoiceId: data.Invoice_ID, folderUrl: folderUrl });
+}
+
+// ---------------------------------------------------------------------------
+// handleSaveInvoice — version-controlled PDF save
+// ---------------------------------------------------------------------------
+function handleSaveInvoice(data) {
+  const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+
+  const nameParts = (data.Full_Name || 'Unknown').trim().split(/\s+/);
+  const lastName  = nameParts[nameParts.length - 1].replace(/[^a-zA-Z0-9]/g, '') || 'Attendee';
+  const folderName = (data.Invoice_ID || 'DRAFT') + '_' + lastName;
+
+  // Find or create folder
+  let userFolder;
+  const existingFolders = mainFolder.getFoldersByName(folderName);
+  if (existingFolders.hasNext()) {
+    userFolder = existingFolders.next();
+  } else {
+    userFolder = mainFolder.createFolder(folderName);
+  }
+
+  if (data.invoice_pdf && data.invoice_pdf.data) {
+    // Determine next version number
+    let maxVer = 0;
+    const files = userFolder.getFiles();
+    while (files.hasNext()) {
+      const fname = files.next().getName();
+      const m = fname.match(/invoice_v(\d+)\.pdf/i);
+      if (m) maxVer = Math.max(maxVer, parseInt(m[1]));
+    }
+    const nextVer = maxVer + 1;
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(data.invoice_pdf.data),
+      'application/pdf',
+      'invoice_v' + nextVer + '.pdf'
+    );
+    userFolder.createFile(blob);
+  }
+
+  return jsonResponse({ success: true });
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function appendToMasterSheet(data, mainFolder, folderUrl) {
+function upsertMasterSheet(data, mainFolder, folderUrl) {
   let spreadsheet;
-
   const files = mainFolder.getFilesByName(MASTER_SHEET_NAME);
   if (files.hasNext()) {
     spreadsheet = SpreadsheetApp.openById(files.next().getId());
@@ -146,10 +176,9 @@ function appendToMasterSheet(data, mainFolder, folderUrl) {
     const ssFile = DriveApp.getFileById(spreadsheet.getId());
     mainFolder.addFile(ssFile);
     DriveApp.getRootFolder().removeFile(ssFile);
-
-    // Header row
     spreadsheet.getActiveSheet().appendRow([
-      'Submission_Date', 'Invoice_ID', 'Title', 'Full_Name', 'Email', 'Phone',
+      'Submission_Date', 'Invoice_ID', 'Status',
+      'Title', 'Full_Name', 'Email', 'Phone',
       'Organization', 'Attendee_Region', 'Country', 'Attendee_Category',
       'Registration_Type', 'Calculated_Total_Fee', 'Currency',
       'Certificate_Name', 'Designation', 'Food_Preference', 'Number_of_Papers',
@@ -159,43 +188,78 @@ function appendToMasterSheet(data, mainFolder, folderUrl) {
     ]);
   }
 
-  spreadsheet.getActiveSheet().appendRow([
-    data.Submission_Date        || '',
-    data.Invoice_ID             || '',
-    data.Title                  || '',
-    data.Full_Name              || '',
-    data.Email                  || '',
-    data.Phone                  || '',
-    data.Organization           || '',
-    data.Attendee_Region        || '',
-    data.Country                || '',
-    data.Attendee_Category      || '',
-    data.Registration_Type      || '',
-    data.Calculated_Total_Fee   || '',
-    data.Currency               || '',
-    data.Certificate_Name       || '',
-    data.Designation            || '',
-    data.Food_Preference        || '',
-    data.Number_of_Papers       || '',
-    data.Company_Name           || '',
-    data.Participant_Count      || '',
-    data.Award_Category         || '',
-    data.Excursion_Local_Count  || '',
-    data.Excursion_Foreign_Count|| '',
-    data.Transaction_Ref        || '',
-    data.Additional_Info        || '',
-    folderUrl                   || ''
-  ]);
+  const sheet  = spreadsheet.getActiveSheet();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const idCol   = headers.indexOf('Invoice_ID');
+
+  // Look for existing row with same Invoice_ID to upsert
+  if (idCol >= 0) {
+    for (let r = 1; r < values.length; r++) {
+      if (values[r][idCol] === data.Invoice_ID) {
+        // Overwrite existing row
+        sheet.getRange(r + 1, 1, 1, headers.length).setValues([buildRow(headers, data, folderUrl)]);
+        return;
+      }
+    }
+  }
+
+  // No existing row — append new
+  sheet.appendRow(buildRow(headers, data, folderUrl));
+}
+
+function buildRow(headers, data, folderUrl) {
+  const map = {
+    Submission_Date:       data.Submission_Date       || '',
+    Invoice_ID:            data.Invoice_ID             || '',
+    Status:                data.Status                 || 'Submitted',
+    Title:                 data.Title                  || '',
+    Full_Name:             data.Full_Name              || '',
+    Email:                 data.Email                  || '',
+    Phone:                 data.Phone                  || '',
+    Organization:          data.Organization           || '',
+    Attendee_Region:       data.Attendee_Region        || '',
+    Country:               data.Country                || '',
+    Attendee_Category:     data.Attendee_Category      || '',
+    Registration_Type:     data.Registration_Type      || '',
+    Calculated_Total_Fee:  data.Calculated_Total_Fee   || '',
+    Currency:              data.Currency               || '',
+    Certificate_Name:      data.Certificate_Name       || '',
+    Designation:           data.Designation            || '',
+    Food_Preference:       data.Food_Preference        || '',
+    Number_of_Papers:      data.Number_of_Papers       || '',
+    Company_Name:          data.Company_Name           || '',
+    Participant_Count:     data.Participant_Count      || '',
+    Award_Category:        data.Award_Category         || '',
+    Excursion_Local_Count: data.Excursion_Local_Count  || '',
+    Excursion_Foreign_Count: data.Excursion_Foreign_Count || '',
+    Transaction_Ref:       data.Transaction_Ref        || '',
+    Additional_Info:       data.Additional_Info        || '',
+    Drive_Folder_URL:      folderUrl                   || ''
+  };
+  return headers.map(h => map[h] !== undefined ? map[h] : (data[h] || ''));
+}
+
+function saveFileToFolder(folder, prefix, fileObj) {
+  const blob = Utilities.newBlob(
+    Utilities.base64Decode(fileObj.data),
+    fileObj.mimeType || 'application/octet-stream',
+    prefix + (fileObj.name || 'file')
+  );
+  folder.createFile(blob);
+}
+
+function deleteFilesByName(folder, name) {
+  const files = folder.getFilesByName(name);
+  while (files.hasNext()) files.next().setTrashed(true);
 }
 
 function getSubmissionsFromSheet(mainFolder) {
   const files = mainFolder.getFilesByName(MASTER_SHEET_NAME);
   if (!files.hasNext()) return [];
-
-  const sheet = SpreadsheetApp.openById(files.next().getId()).getActiveSheet();
+  const sheet  = SpreadsheetApp.openById(files.next().getId()).getActiveSheet();
   const values = sheet.getDataRange().getValues();
   if (values.length <= 1) return [];
-
   const headers = values[0];
   return values.slice(1).map(row => {
     const obj = {};
@@ -214,4 +278,10 @@ function generateInvoiceId() {
     pad(now.getHours()) +
     pad(now.getMinutes()) +
     pad(now.getSeconds());
+}
+
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }

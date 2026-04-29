@@ -6,21 +6,29 @@ const defaultSettings = {
         nonsaarc: { author: 250, nonauthor: 200, student: 150 }
     },
     discounts: {
-        student_from_2nd: 10 // percentage
+        student_from_2nd: 10,       // percentage
+        discount_max_papers: 0      // 0 = unlimited; N = cap at N papers receiving discount
     },
     award_fee: 10000,
     excursion_fees: {
         local: 15000,
         foreigner: 17000
     },
+    inauguration_fee: 0,            // LKR; 0 = disabled; Student opt-in only
     journals: [
         { id: 'j1', name: 'Scopus Q1', fee: 300 },
         { id: 'j2', name: 'Scopus Q2', fee: 200 },
         { id: 'j3', name: 'Other', fee: 100 }
     ],
-    chair_name: 'Prof. [Name]',   // Configurable from Settings
-    refund_deadline: 'August 23, 2025', // Configurable from Settings
-    usd_to_lkr: 320 // Indicative rate shown on invoice; update before going live
+    pre_conference_sessions: [],    // { id, name, fee_local, fee_saarc, fee_nonsaarc }
+    categories: [
+        { id: 'author',    label: 'Author',     fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250 },
+        { id: 'nonauthor', label: 'Non-Author', fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200 },
+        { id: 'student',   label: 'Student',    fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150 }
+    ],
+    chair_name: 'Dr. Gayashika Fernando',
+    refund_deadline: 'August 23, 2025',
+    usd_to_lkr: 320
 };
 
 // ---- GOOGLE DRIVE CONFIGURATION ----
@@ -77,7 +85,9 @@ function init() {
     updateAdminDashboard();
     populateSettingsForm();
     populateJournalsDropdown();
-    generatePaperBlocks(1); // Pre-generate 1 block
+    rebuildCategoryDropdown();
+    rebuildSessionCheckboxes();
+    generatePaperBlocks(1);
     setupEventListeners();
     updateSubmitButtonState();
     updateExcursionTicketVisibility();
@@ -165,6 +175,7 @@ function setupEventListeners() {
             if (studentIdSection) studentIdSection.classList.add('hidden');
             if (studentIdField) studentIdField.required = false;
             if (studentRequired) studentRequired.classList.add('hidden');
+            hideInauguration();
 
         } else if (category === 'Student') {
             // --- Student: show papers + require student ID ---
@@ -179,6 +190,7 @@ function setupEventListeners() {
             if (studentIdSection) studentIdSection.classList.remove('hidden');
             if (studentIdField) studentIdField.required = true;
             if (studentRequired) studentRequired.classList.remove('hidden');
+            showInauguration();
 
         } else {
             // --- Author: show papers, hide student ID ---
@@ -193,6 +205,7 @@ function setupEventListeners() {
             if (studentIdSection) studentIdSection.classList.add('hidden');
             if (studentIdField) studentIdField.required = false;
             if (studentRequired) studentRequired.classList.add('hidden');
+            hideInauguration();
         }
 
         // Re-generate paper blocks for the current count (or clear them)
@@ -277,7 +290,10 @@ function setupEventListeners() {
     // Invoice download
     document.getElementById('btn-download-invoice').addEventListener('click', generateInvoice);
 
-    // Form Submission
+    // Step 1 — Save & get ref ID
+    document.getElementById('btn-step1')?.addEventListener('click', handleStep1);
+
+    // Form Submission (Step 2)
     registrationForm.addEventListener('submit', handleFormSubmit);
 
     // Navigation Toggle
@@ -322,6 +338,8 @@ function setupEventListeners() {
     // Settings Actions
     document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
     document.getElementById('btn-add-journal').addEventListener('click', addJournalField);
+    document.getElementById('btn-add-category')?.addEventListener('click', addCategoryField);
+    document.getElementById('btn-add-session')?.addEventListener('click', addSessionField);
 }
 
 // ---- DYNAMIC UI LOGIC ----
@@ -430,12 +448,8 @@ function updateExcursionTicketVisibility() {
 }
 
 function calculateTotalFee() {
-    let totalUSD = 0;
-    let totalLKR = 0;
-    let breakdownText = '';
-
-    const isMain = document.getElementById('toggleMain').checked;
-    const isAward = document.getElementById('toggleAward').checked;
+    const isMain     = document.getElementById('toggleMain').checked;
+    const isAward    = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
 
     if (!isMain && !isAward && !isExcursion) {
@@ -445,151 +459,207 @@ function calculateTotalFee() {
         priceBreakdown.innerHTML = '';
         return;
     }
-
     priceBox.classList.remove('hidden');
 
-    // 1. Calculate Main Conference & APC
+    const region = document.getElementById('attendeeRegion').value;
+    const isLocalRegion = region === 'Local';
+    const fxRate = appSettings.usd_to_lkr || 320;
+    const displayCur = isLocalRegion ? 'LKR' : 'USD';
+
+    // Convert any amount from its native currency to the display currency
+    const toDisplay = (amount, fromCur) => {
+        if (fromCur === displayCur) return amount;
+        return displayCur === 'LKR' ? Math.round(amount * fxRate) : +((amount / fxRate).toFixed(2));
+    };
+
+    let displayTotal = 0;
+    let breakdownText = '';
+    const br = () => { if (breakdownText) breakdownText += ' <br> '; };
+
+    // 1. Main Conference & APC
     if (isMain) {
-        const region = document.getElementById('attendeeRegion').value;
         const category = document.getElementById('attendeeCategory').value;
-        const papers = parseInt(document.getElementById('numberOfPapers').value) || 1;
+        const papers   = parseInt(document.getElementById('numberOfPapers').value) || 1;
 
         if (!region || !category) {
-            breakdownText += `<span><i class='bx bx-info-circle'></i> Select Region & Category for Conf Fee</span> <br>`;
+            breakdownText += `<span><i class='bx bx-info-circle'></i> Select Region & Category for Conf Fee</span>`;
         } else {
-            // Determine currency and branch
-            let regionKey = region.toLowerCase().replace('-', '');
-            let categoryKey;
-
-            if (category.toLowerCase() === 'student') {
-                categoryKey = 'student';
-            } else if (category.toLowerCase() === 'non-author') {
-                categoryKey = 'nonauthor';
+            // Resolve base fee from flexible categories list
+            const catDef = (appSettings.categories || []).find(c => c.label === category);
+            let baseFee = 0;
+            let nativeCur = isLocalRegion ? 'LKR' : 'USD';
+            if (catDef) {
+                baseFee = isLocalRegion ? catDef.fee_local : (region === 'SAARC' ? catDef.fee_saarc : catDef.fee_nonsaarc);
             } else {
-                categoryKey = 'author';
+                // Fallback: legacy conf_fees lookup
+                const regionKey = region.toLowerCase().replace(/[^a-z]/g, '');
+                const catKey = category === 'Student' ? 'student' : category === 'Non-Author' ? 'nonauthor' : 'author';
+                baseFee = (appSettings.conf_fees?.[regionKey]?.[catKey]) || 0;
             }
 
-            const isLKR = region === 'Local';
-            let baseFee = appSettings.conf_fees[regionKey][categoryKey];
-            let confTotal = 0;
+            const isStudent = category === 'Student';
+            const maxP = appSettings.discounts.discount_max_papers || 0;
+            const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
+            const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
+            const disc       = (appSettings.discounts.student_from_2nd || 0) / 100;
 
+            let confTotal;
             if (papers === 1) {
                 confTotal = baseFee;
-                breakdownText += `<span>Conference Fee:</span><span>${confTotal} ${isLKR ? 'LKR' : 'USD'}</span>`;
+                br(); breakdownText += `<span>Conference Fee:</span><span>${confTotal} ${nativeCur}</span>`;
+            } else if (isStudent && disc > 0) {
+                const discFee = baseFee * (1 - disc);
+                confTotal = baseFee + (discFee * discPapers) + (baseFee * fullExtra);
+                br(); breakdownText += `<span>Conf (1st: ${baseFee} | ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? ` | ${fullExtra} × ${baseFee} full` : ''}):</span><span>${confTotal.toFixed(2)} ${nativeCur}</span>`;
             } else {
-                // Calculate with discount
-                const firstPaperFee = baseFee;
-                let otherPapersFee = 0;
-
-                if (categoryKey === 'student') {
-                    const discount = appSettings.discounts.student_from_2nd / 100;
-                    const discountedFee = baseFee * (1 - discount);
-                    otherPapersFee = discountedFee * (papers - 1);
-                    confTotal = firstPaperFee + otherPapersFee;
-                    breakdownText += `<span>Conf (1st Paper: ${firstPaperFee} | ${papers - 1} Added @ ${appSettings.discounts.student_from_2nd}% off):</span><span>${confTotal} ${isLKR ? 'LKR' : 'USD'}</span>`;
-                } else {
-                    confTotal = baseFee * papers;
-                    breakdownText += `<span>Conf (${papers} Papers):</span><span>${confTotal} ${isLKR ? 'LKR' : 'USD'}</span>`;
-                }
+                confTotal = baseFee * papers;
+                br(); breakdownText += `<span>Conf (${papers} Papers):</span><span>${confTotal} ${nativeCur}</span>`;
             }
-
-            if (isLKR) {
-                totalLKR += confTotal;
-            } else {
-                totalUSD += confTotal;
-            }
+            displayTotal += toDisplay(confTotal, nativeCur);
         }
 
-        // Add APC calculations
-        let totalApcFees = 0;
-        const container = document.getElementById('dynamic-papers-container');
-        container.querySelectorAll('.apc-toggle').forEach((toggle, index) => {
+        // APC (always USD)
+        document.getElementById('dynamic-papers-container').querySelectorAll('.apc-toggle').forEach((toggle, i) => {
             if (toggle.checked) {
-                const select = document.getElementById(`journal_${index + 1}`);
-                if (select && select.value) {
-                    const opt = select.options[select.selectedIndex];
-                    const fee = parseFloat(opt.dataset.fee);
-                    totalApcFees += fee;
-                    breakdownText += ` <br> <span>+ P${index + 1} APC: ${fee} USD</span>`;
+                const sel = document.getElementById(`journal_${i + 1}`);
+                if (sel && sel.value) {
+                    const fee = parseFloat(sel.options[sel.selectedIndex].dataset.fee) || 0;
+                    const disp = toDisplay(fee, 'USD');
+                    displayTotal += disp;
+                    br(); breakdownText += `<span>+ P${i + 1} APC (${sel.value}):</span><span>${disp} ${displayCur}</span>`;
                 }
             }
         });
 
-        totalUSD += totalApcFees;
+        // Inauguration opt-in (LKR)
+        const inaugCheck = document.getElementById('includeInauguration');
+        if (inaugCheck?.checked && appSettings.inauguration_fee > 0) {
+            const disp = toDisplay(appSettings.inauguration_fee, 'LKR');
+            displayTotal += disp;
+            br(); breakdownText += `<span>Inauguration Ceremony:</span><span>${disp} ${displayCur}</span>`;
+        }
+
+        // Pre-conference sessions
+        document.querySelectorAll('.preconf-session-check').forEach(chk => {
+            if (chk.checked) {
+                const sessId = chk.dataset.sessId;
+                const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === sessId);
+                if (sess) {
+                    const rawFee = isLocalRegion ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                    const nativeCur2 = isLocalRegion ? 'LKR' : 'USD';
+                    const disp = toDisplay(rawFee, nativeCur2);
+                    displayTotal += disp;
+                    br(); breakdownText += `<span>Session: ${sess.name}:</span><span>${disp} ${displayCur}</span>`;
+                }
+            }
+        });
     }
 
-
-    // 2. Excellence Award
+    // 2. Excellence Award (LKR)
     if (isAward) {
         const pax = parseInt(document.getElementById('participantCount').value) || 1;
-        const base = appSettings.award_fee;
-        const awardTotal = base * pax;
-        totalLKR += awardTotal;
-        if (breakdownText) breakdownText += ` <br> `;
-        breakdownText += `<span>Award (${pax} Pax):</span><span>${awardTotal} LKR</span>`;
+        const awardTotal = appSettings.award_fee * pax;
+        const disp = toDisplay(awardTotal, 'LKR');
+        displayTotal += disp;
+        br(); breakdownText += `<span>Award (${pax} Pax):</span><span>${disp} ${displayCur}</span>`;
     }
 
-    // 3. Excursion (handles both Main Add-on and Dedicated forms now that they are unified, but we'll prioritize the dedicated inputs)
+    // 3. Excursion (LKR)
     if (isExcursion) {
         const locCount = parseInt(document.getElementById('excursionLocalCount').value) || 0;
         const forCount = parseInt(document.getElementById('excursionForeignCount').value) || 0;
-
         if (locCount > 0) {
-            const locCost = locCount * appSettings.excursion_fees.local;
-            totalLKR += locCost;
-            if (breakdownText) breakdownText += ` <br> `;
-            breakdownText += `<span>Local Excr (${locCount}):</span><span>${locCost} LKR</span>`;
+            const fee = locCount * appSettings.excursion_fees.local;
+            const disp = toDisplay(fee, 'LKR');
+            displayTotal += disp;
+            br(); breakdownText += `<span>Local Excr (${locCount}):</span><span>${disp} ${displayCur}</span>`;
         }
         if (forCount > 0) {
-            const forCost = forCount * appSettings.excursion_fees.foreigner;
-            totalLKR += forCost;
-            if (breakdownText) breakdownText += ` <br> `;
-            breakdownText += `<span>Foreign Excr (${forCount}):</span><span>${forCost} LKR</span>`;
+            const fee = forCount * appSettings.excursion_fees.foreigner;
+            const disp = toDisplay(fee, 'LKR');
+            displayTotal += disp;
+            br(); breakdownText += `<span>Foreign Excr (${forCount}):</span><span>${disp} ${displayCur}</span>`;
         }
     }
 
-    // Final Display output for mixed currencies
-    if (totalUSD > 0 && totalLKR > 0) {
-        priceCurrency.textContent = 'USD';
-        priceTotalAmount.textContent = `${totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2 })} + LKR ${totalLKR.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-    } else if (totalUSD > 0) {
-        priceCurrency.textContent = 'USD';
-        priceTotalAmount.textContent = totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2 });
-    } else {
-        priceCurrency.textContent = 'LKR';
-        priceTotalAmount.textContent = totalLKR.toLocaleString(undefined, { minimumFractionDigits: 2 });
-    }
-
+    priceCurrency.textContent = displayCur;
+    priceTotalAmount.textContent = displayTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     priceBreakdown.innerHTML = breakdownText;
 }
 
 
-// ---- FORM SUBMISSION LOGIC ----
+// ---- FORM SUBMISSION LOGIC (2-STEP) ----
 
-async function handleFormSubmit(e) {
-    e.preventDefault();
+// Shared helper: collect form data object (no files)
+function collectFormData(refId) {
+    const formData = new FormData(registrationForm);
+    const dataObj = {};
+    dataObj['Submission_Date'] = new Date().toLocaleString();
+    dataObj['Invoice_ID'] = refId;
+    for (let [key, value] of formData.entries()) {
+        if (value instanceof File) { dataObj[key] = value.name || ''; continue; }
+        dataObj[key] = dataObj[key] ? `${dataObj[key]}, ${value}` : value;
+    }
+    dataObj['Calculated_Total_Fee'] = document.getElementById('totalPriceAmount').textContent;
+    dataObj['Currency'] = document.querySelector('.price-value .currency').textContent;
+    const typesArr = [];
+    if (document.getElementById('toggleMain').checked)    typesArr.push('Main');
+    if (document.getElementById('toggleAward').checked)   typesArr.push('Award');
+    if (document.getElementById('toggleExcursion').checked) typesArr.push('Excursion');
+    dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
+    return dataObj;
+}
 
-    // Validate at least one registration type is selected
+// STEP 1 — Save draft + get Ref ID (no payment proof required)
+async function handleStep1(e) {
+    e?.preventDefault();
     const isMain = document.getElementById('toggleMain').checked;
     const isAward = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
-
     if (!isMain && !isAward && !isExcursion) {
-        showToast('Please select at least one registration type (Conference, Award, or Excursion)', 'error');
-        return;
+        showToast('Please select at least one registration type.', 'error'); return;
     }
-
-    // Validate excursion ticket count if excursion is selected
     if (isExcursion) {
-        const localCount = parseInt(document.getElementById('excursionLocalCount').value) || 0;
-        const foreignCount = parseInt(document.getElementById('excursionForeignCount').value) || 0;
-        if (localCount === 0 && foreignCount === 0) {
-            showToast('Please specify at least one excursion ticket (local or foreign)', 'error');
-            return;
-        }
+        const lc = parseInt(document.getElementById('excursionLocalCount').value) || 0;
+        const fc = parseInt(document.getElementById('excursionForeignCount').value) || 0;
+        if (lc === 0 && fc === 0) { showToast('Please specify at least one excursion ticket.', 'error'); return; }
     }
 
-    // Validate payment proof is uploaded (mandatory to complete registration)
+    // Generate or reuse reference ID
+    let refId = document.getElementById('reg-ref-id')?.textContent?.trim();
+    if (!refId || refId === '—') {
+        refId = 'SICET2026-' + Date.now().toString().slice(-7);
+    }
+
+    const dataObj = collectFormData(refId);
+    dataObj['Status'] = 'Pending Payment';
+
+    const studentIdInput = document.getElementById('studentId');
+    if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+
+    const btn1 = document.getElementById('btn-step1');
+    if (btn1) { btn1.disabled = true; btn1.innerHTML = '<span>Saving…</span><i class="bx bx-loader bx-spin"></i>'; }
+
+    const ok = await submitToGoogleDrive(dataObj);
+
+    if (btn1) { btn1.disabled = false; btn1.innerHTML = '<span>Save & Get Reference ID</span><i class="bx bx-save"></i>'; }
+    if (!ok) return;
+
+    // Show the reference ID and reveal Step 2
+    const refEl = document.getElementById('reg-ref-id');
+    if (refEl) refEl.textContent = refId;
+    const step2 = document.getElementById('step2-section');
+    if (step2) step2.classList.remove('hidden');
+    step2?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    saveDraft();
+    showToast(`Reference ID: ${refId} — now proceed to make payment, then complete Step 2.`, 'success');
+}
+
+// STEP 2 — Upload payment proof and finalize
+async function handleFormSubmit(e) {
+    e.preventDefault();
+
     const paymentProofInput = document.getElementById('paymentProof');
     if (!paymentProofInput.files[0]) {
         showToast('Please upload your proof of payment before submitting.', 'error');
@@ -597,49 +667,18 @@ async function handleFormSubmit(e) {
         return;
     }
 
-    // Create FormData object
-    const formData = new FormData(registrationForm);
-    const dataObj = {};
-
-    // Add timestamp and unique invoice ID
-    dataObj['Submission_Date'] = new Date().toLocaleString();
-    dataObj['Invoice_ID'] = 'SICET2026-' + Date.now().toString().slice(-7);
-
-    for (let [key, value] of formData.entries()) {
-        // Store filename string; actual file bytes are handled separately below
-        if (value instanceof File) {
-            dataObj[key] = value.name ? value.name : '';
-            continue;
-        }
-
-        if (dataObj[key]) {
-            dataObj[key] = `${dataObj[key]}, ${value}`;
-        } else {
-            dataObj[key] = value;
-        }
+    let refId = document.getElementById('reg-ref-id')?.textContent?.trim();
+    if (!refId || refId === '—') {
+        showToast('Please complete Step 1 first to get a Reference ID.', 'error'); return;
     }
 
-    // Capture calculated total
-    dataObj['Calculated_Total_Fee'] = document.getElementById('totalPriceAmount').textContent;
-    dataObj['Currency'] = document.querySelector('.price-value .currency').textContent;
+    const dataObj = collectFormData(refId);
+    dataObj['Status'] = 'Submitted';
 
-    // Determine compound registration type name for admin dashboard
-    let typesArr = [];
-    if (document.getElementById('toggleMain').checked) typesArr.push('Main');
-    if (document.getElementById('toggleAward').checked) typesArr.push('Award');
-    if (document.getElementById('toggleExcursion').checked) typesArr.push('Excursion');
-    dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
-
-    // Convert uploaded files to base64 for Drive storage
     const studentIdInput = document.getElementById('studentId');
-    if (studentIdInput.files[0]) {
-        dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
-    }
-    if (paymentProofInput.files[0]) {
-        dataObj['Payment_Proof_Base64'] = await fileToBase64(paymentProofInput.files[0]);
-    }
+    if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+    dataObj['Payment_Proof_Base64'] = await fileToBase64(paymentProofInput.files[0]);
 
-    // Disable submit button while uploading
     const submitBtn = document.getElementById('btn-submit');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span>Submitting…</span><i class="bx bx-loader bx-spin"></i>';
@@ -648,21 +687,16 @@ async function handleFormSubmit(e) {
 
     submitBtn.disabled = false;
     submitBtn.innerHTML = '<span>Submit Registration</span><i class="bx bx-right-arrow-alt"></i>';
-
     if (!ok) return;
 
-    // Clear Draft on success
     clearDraft();
-
-    // Reset Form
     registrationForm.reset();
+    document.querySelectorAll('.section-toggle').forEach(t => t.dispatchEvent(new Event('change')));
+    const refEl = document.getElementById('reg-ref-id');
+    if (refEl) refEl.textContent = '—';
+    document.getElementById('step2-section')?.classList.add('hidden');
 
-    // Hide dynamic sections
-    document.querySelectorAll('.section-toggle').forEach(t => {
-        t.dispatchEvent(new Event('change'));
-    });
-
-    showToast(`Submitted! Reference: ${dataObj.Invoice_ID}`, 'success');
+    showToast(`Registration complete! Reference: ${refId}`, 'success');
 }
 
 // ---- PROFORMA INVOICE (jsPDF) LOGIC ----
@@ -700,91 +734,116 @@ function generateInvoice() {
     const dateStr = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const invoiceNum = 'SICET2026-' + dateObj.getTime().toString().slice(-7);
 
-    // ---- 2. Build Line Items ----
-    let lineItemsLKR = [];
-    let lineItemsUSD = [];
-    let totalLKR = 0;
-    let totalUSD = 0;
+    // ---- 2. Build Line Items (single target currency) ----
+    const isLocalInv = region === 'Local';
+    const invoiceCur = isLocalInv ? 'LKR' : 'USD';
+    const fxRateInv  = appSettings.usd_to_lkr || 320;
+
+    const toIC = (amount, fromCur) => {
+        if (amount === null || amount === undefined) return null;
+        if (fromCur === invoiceCur) return amount;
+        return invoiceCur === 'LKR' ? Math.round(amount * fxRateInv) : +((amount / fxRateInv).toFixed(2));
+    };
+
+    let lineItems = [];
+    let grandTotal = 0;
+    const addItem = (desc, amount, fromCur) => {
+        const converted = toIC(amount, fromCur);
+        lineItems.push({ description: desc, amount: converted });
+        if (converted !== null) grandTotal += converted;
+    };
 
     if (isMain) {
         const papers = parseInt(document.getElementById('numberOfPapers').value) || 0;
-        const isLocal = (region === 'Local');
-        let regionKey = region.toLowerCase().replace('-', '').replace(' ', '') || 'local';
-        let catKey = category === 'Student' ? 'student' : category === 'Non-Author' ? 'nonauthor' : 'author';
+        const nativeCur = isLocalInv ? 'LKR' : 'USD';
+
+        // Resolve base fee from flexible categories
+        const catDef = (appSettings.categories || []).find(c => c.label === category);
+        let baseFee = 0;
+        if (catDef) {
+            baseFee = isLocalInv ? catDef.fee_local : (region === 'SAARC' ? catDef.fee_saarc : catDef.fee_nonsaarc);
+        } else {
+            const rKey = region.toLowerCase().replace(/[^a-z]/g, '');
+            const cKey = category === 'Student' ? 'student' : category === 'Non-Author' ? 'nonauthor' : 'author';
+            baseFee = appSettings.conf_fees?.[rKey]?.[cKey] || 0;
+        }
 
         if (category !== 'Non-Author' && papers > 0) {
-            const baseFee = appSettings.conf_fees[regionKey]?.[catKey] || 0;
-            let confTotal = 0;
-            let confLabel = '';
+            const isStudent = category === 'Student';
+            const maxP = appSettings.discounts.discount_max_papers || 0;
+            const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
+            const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
+            const disc       = (appSettings.discounts.student_from_2nd || 0) / 100;
+
+            let confTotal, confLabel;
             if (papers === 1) {
                 confTotal = baseFee;
                 confLabel = `Conference Registration — ${title} ${fullName} (${category}, ${region})`;
-            } else if (catKey === 'student') {
-                const disc = appSettings.discounts.student_from_2nd / 100;
-                confTotal = baseFee + (baseFee * (1 - disc) * (papers - 1));
-                confLabel = `Conference (${papers} Papers — 1st: ${baseFee}, ${papers - 1} × ${(baseFee * (1 - disc)).toFixed(0)} w/ 10% off)`;
+            } else if (isStudent && disc > 0) {
+                const discFee = baseFee * (1 - disc);
+                confTotal = baseFee + (discFee * discPapers) + (baseFee * fullExtra);
+                confLabel = `Conference (${papers} papers — 1st: ${baseFee}, ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? `, ${fullExtra} × ${baseFee} full` : ''})`;
             } else {
                 confTotal = baseFee * papers;
                 confLabel = `Conference Registration — ${papers} Papers × ${baseFee} (${category}, ${region})`;
             }
-            if (isLocal) { lineItemsLKR.push({ description: confLabel, amount: Math.round(confTotal) }); totalLKR += confTotal; }
-            else { lineItemsUSD.push({ description: confLabel, amount: confTotal }); totalUSD += confTotal; }
+            addItem(confLabel, confTotal, nativeCur);
 
-            // All paper details in one combined note row
+            // Paper details note
             const paperNotes = [];
             for (let i = 1; i <= papers; i++) {
-                const paperId = document.getElementById(`paperId_${i}`)?.value || '';
-                const paperTitle = document.getElementById(`paperTitle_${i}`)?.value || '';
-                const shortTitle = paperTitle.length > 32 ? paperTitle.slice(0, 32) + '…' : paperTitle;
-                if (paperId || paperTitle) paperNotes.push(`P${i}${paperId ? ':' + paperId : ''}${shortTitle ? ' — ' + shortTitle : ''}`);
+                const pid = document.getElementById(`paperId_${i}`)?.value || '';
+                const ptitle = document.getElementById(`paperTitle_${i}`)?.value || '';
+                const st = ptitle.length > 32 ? ptitle.slice(0, 32) + '…' : ptitle;
+                if (pid || ptitle) paperNotes.push(`P${i}${pid ? ':' + pid : ''}${st ? ' — ' + st : ''}`);
 
                 const apcToggle = document.getElementById(`includeApc_${i}`);
                 const journalSel = document.getElementById(`journal_${i}`);
                 if (apcToggle?.checked && journalSel?.value) {
-                    const opt = journalSel.options[journalSel.selectedIndex];
-                    const apcFee = parseFloat(opt.dataset.fee) || 0;
-                    lineItemsUSD.push({ description: `  APC — P${i}: ${journalSel.value}`, amount: apcFee });
-                    totalUSD += apcFee;
+                    const apcFee = parseFloat(journalSel.options[journalSel.selectedIndex].dataset.fee) || 0;
+                    addItem(`  APC — P${i}: ${journalSel.value}`, apcFee, 'USD');
                 }
             }
-            if (paperNotes.length > 0) {
-                const noteRow = { description: '  Papers: ' + paperNotes.join(' | '), amount: null };
-                isLocal ? lineItemsLKR.push(noteRow) : lineItemsUSD.push(noteRow);
-            }
+            if (paperNotes.length > 0) addItem('  Papers: ' + paperNotes.join(' | '), null, nativeCur);
+
         } else if (category === 'Non-Author') {
-            const baseFee = appSettings.conf_fees[regionKey]?.[catKey] || 0;
-            const confLabel = `Conference Registration — ${title} ${fullName} (Non-Author, ${region})`;
-            if (isLocal) { lineItemsLKR.push({ description: confLabel, amount: baseFee }); totalLKR += baseFee; }
-            else { lineItemsUSD.push({ description: confLabel, amount: baseFee }); totalUSD += baseFee; }
+            addItem(`Conference Registration — ${title} ${fullName} (Non-Author, ${region})`, baseFee, nativeCur);
         }
+
+        // Inauguration opt-in (LKR, student only)
+        const inaugCheck = document.getElementById('includeInauguration');
+        if (inaugCheck?.checked && appSettings.inauguration_fee > 0) {
+            addItem('Inauguration Ceremony (opt-in)', appSettings.inauguration_fee, 'LKR');
+        }
+
+        // Pre-conference sessions
+        document.querySelectorAll('.preconf-session-check').forEach(chk => {
+            if (chk.checked) {
+                const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
+                if (sess) {
+                    const rawFee = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                    addItem(`Pre-Conference Session: ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
+                }
+            }
+        });
     }
 
     if (isAward) {
         const pax = parseInt(document.getElementById('participantCount').value) || 1;
         const names = document.getElementById('participantNames').value || '';
         const awardCat = document.getElementById('awardCategory').value || '';
-        const awardFee = appSettings.award_fee * pax;
-        lineItemsLKR.push({ description: `Excellence Award — ${awardCat || 'Category TBD'} (${pax} pax)`, amount: awardFee });
-        if (names) lineItemsLKR.push({ description: `  Participants: ${names.slice(0, 80)}${names.length > 80 ? '…' : ''}`, amount: null });
-        totalLKR += awardFee;
+        addItem(`Excellence Award — ${awardCat || 'Category TBD'} (${pax} pax)`, appSettings.award_fee * pax, 'LKR');
+        if (names) addItem(`  Participants: ${names.slice(0, 80)}${names.length > 80 ? '…' : ''}`, null, 'LKR');
     }
 
     if (isExcursion) {
         const locCount = parseInt(document.getElementById('excursionLocalCount').value) || 0;
         const forCount = parseInt(document.getElementById('excursionForeignCount').value) || 0;
-        if (locCount > 0) {
-            const fee = locCount * appSettings.excursion_fees.local;
-            lineItemsLKR.push({ description: `Excursion — Local × ${locCount} (LKR ${appSettings.excursion_fees.local.toLocaleString()} each)`, amount: fee });
-            totalLKR += fee;
-        }
-        if (forCount > 0) {
-            const fee = forCount * appSettings.excursion_fees.foreigner;
-            lineItemsLKR.push({ description: `Excursion — Foreign × ${forCount} (LKR ${appSettings.excursion_fees.foreigner.toLocaleString()} each)`, amount: fee });
-            totalLKR += fee;
-        }
+        if (locCount > 0) addItem(`Excursion — Local × ${locCount} (LKR ${appSettings.excursion_fees.local.toLocaleString()} each)`, locCount * appSettings.excursion_fees.local, 'LKR');
+        if (forCount > 0) addItem(`Excursion — Foreign × ${forCount} (LKR ${appSettings.excursion_fees.foreigner.toLocaleString()} each)`, forCount * appSettings.excursion_fees.foreigner, 'LKR');
     }
 
-    if (totalLKR === 0 && totalUSD === 0) {
+    if (grandTotal === 0 && lineItems.every(i => i.amount === null)) {
         showToast('No fees calculated. Please fill in all registration details first.', 'error');
         return;
     }
@@ -885,71 +944,18 @@ function generateInvoice() {
     Y += 8;
     doc.setTextColor(0, 0, 0);
 
-    // --- LKR ITEMS ---
-    if (lineItemsLKR.length > 0) {
-        if (totalUSD > 0) {
-            if (Y + 5 > 278) { doc.addPage(); Y = 14; }
-            doc.setFillColor(220, 220, 220);
-            doc.rect(L, Y, W, 5, 'F');
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(40, 40, 40);
-            doc.text('LKR — Sri Lankan Rupee Items', L + 3, Y + 3.5);
-            Y += 5;
-        }
-        doc.setFontSize(8.5); doc.setTextColor(0, 0, 0);
-        lineItemsLKR.forEach((item, idx) => drawRow(item.description, item.amount, 'LKR', false, idx % 2 === 0));
-    }
+    // --- LINE ITEMS (all in invoiceCur) ---
+    doc.setFontSize(8.5); doc.setTextColor(0, 0, 0);
+    lineItems.forEach((item, idx) => drawRow(item.description, item.amount, invoiceCur, false, idx % 2 === 0));
 
-    // --- USD ITEMS ---
-    if (lineItemsUSD.length > 0) {
-        if (totalLKR > 0) {
-            if (Y + 5 > 278) { doc.addPage(); Y = 14; }
-            doc.setFillColor(220, 220, 220);
-            doc.rect(L, Y, W, 5, 'F');
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(40, 40, 40);
-            doc.text('USD — US Dollar Items', L + 3, Y + 3.5);
-            Y += 5;
-        }
-        doc.setFontSize(8.5); doc.setTextColor(0, 0, 0);
-        lineItemsUSD.forEach((item, idx) => drawRow(item.description, item.amount, 'USD', false, idx % 2 === 0));
-    }
-
-    // --- TOTALS ---
+    // --- GRAND TOTAL ---
     Y += 3;
-    const isLocalRegion = region === 'Local';
-    const fxRate = appSettings.usd_to_lkr || 320;
-    const hasBothCurrencies = totalLKR > 0 && totalUSD > 0;
-
-    // Show per-currency sub-totals only when items exist in both currencies
-    if (hasBothCurrencies) {
-        if (Y + 9 > 278) { doc.addPage(); Y = 14; }
-        doc.setFillColor(232, 232, 232); doc.setDrawColor(100, 100, 100); doc.setLineWidth(0.3);
-        doc.rect(L, Y, W, 9, 'FD');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(0, 0, 0);
-        doc.text('Sub-Total (LKR items):', L + 3, Y + 6.5);
-        doc.text(`LKR ${fmt(totalLKR)}`, R - 3, Y + 6.5, { align: 'right' });
-        Y += 11;
-
-        if (Y + 9 > 278) { doc.addPage(); Y = 14; }
-        doc.setFillColor(232, 232, 232); doc.setDrawColor(100, 100, 100); doc.setLineWidth(0.3);
-        doc.rect(L, Y, W, 9, 'FD');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(0, 0, 0);
-        doc.text('Sub-Total (USD items):', L + 3, Y + 6.5);
-        doc.text(`USD ${fmt(totalUSD)}`, R - 3, Y + 6.5, { align: 'right' });
-        Y += 11;
-    }
-
-    // Grand Total — single currency: LKR for local attendees, USD for all others
-    const grandCurrency = isLocalRegion ? 'LKR' : 'USD';
-    const grandTotal = isLocalRegion
-        ? totalLKR + (totalUSD * fxRate)
-        : totalUSD + (totalLKR / fxRate);
-
     if (Y + 10 > 278) { doc.addPage(); Y = 14; }
     doc.setFillColor(20, 20, 20); doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3);
     doc.rect(L, Y, W, 10, 'FD');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(255, 255, 255);
     doc.text('GRAND TOTAL:', L + 3, Y + 7);
-    doc.text(`${grandCurrency} ${fmt(grandTotal)}`, R - 3, Y + 7, { align: 'right' });
+    doc.text(`${invoiceCur} ${fmt(grandTotal)}`, R - 3, Y + 7, { align: 'right' });
     Y += 12;
     doc.setTextColor(0, 0, 0);
 
@@ -1032,8 +1038,33 @@ function generateInvoice() {
     doc.text('This is a Proforma Invoice — not a tax invoice. Payment confirms registration.', L, Y);
 
     const safeName = fullName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'attendee';
-    doc.save(`SICET2026_Invoice_${invoiceNum}_${safeName}.pdf`);
-    showToast('Invoice generated successfully!', 'success');
+    const pdfFileName = `SICET2026_Invoice_${invoiceNum}_${safeName}.pdf`;
+    doc.save(pdfFileName);
+
+    // Save invoice PDF to Google Drive (async, non-blocking)
+    try {
+        const pdfBase64 = doc.output('datauristring').split(',')[1];
+        const refId = document.getElementById('reg-ref-id')?.textContent || invoiceNum;
+        saveInvoiceToDrive(refId, fullName, pdfFileName, pdfBase64);
+    } catch (_) { /* Drive save is best-effort */ }
+
+    showToast('Invoice generated and saved to Drive!', 'success');
+}
+
+async function saveInvoiceToDrive(refId, fullName, fileName, base64Data) {
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({
+                action: 'saveInvoice',
+                Invoice_ID: refId,
+                Full_Name: fullName,
+                invoice_pdf: { name: fileName, mimeType: 'application/pdf', data: base64Data }
+            })
+        });
+    } catch (_) { /* silent */ }
 }
 
 // ---- DRAFT (AUTO-SAVE) LOGIC ----
@@ -1280,9 +1311,11 @@ function populateSettingsForm() {
     document.getElementById('fee_conf_nonsaarc_student').value = appSettings.conf_fees.nonsaarc.student;
 
     document.getElementById('fee_conf_student_discount').value = appSettings.discounts.student_from_2nd;
+    document.getElementById('fee_discount_max_papers').value = appSettings.discounts.discount_max_papers || 0;
 
     // Awards & Excursion
     document.getElementById('fee_award_base').value = appSettings.award_fee;
+    document.getElementById('fee_inauguration').value = appSettings.inauguration_fee || 0;
     document.getElementById('fee_excursion_local').value = appSettings.excursion_fees.local;
     document.getElementById('fee_excursion_foreigner').value = appSettings.excursion_fees.foreigner;
 
@@ -1296,6 +1329,9 @@ function populateSettingsForm() {
 
     // Journals
     renderJournalsAdmin();
+    // Categories & Sessions
+    renderCategoriesAdmin();
+    renderSessionsAdmin();
 }
 
 function renderJournalsAdmin() {
@@ -1347,9 +1383,11 @@ function saveSettings(e) {
     appSettings.conf_fees.nonsaarc.nonauthor = Number(document.getElementById('fee_conf_nonsaarc_nonauthor').value);
     appSettings.conf_fees.nonsaarc.student = Number(document.getElementById('fee_conf_nonsaarc_student').value);
 
-    appSettings.discounts.student_from_2nd = Number(document.getElementById('fee_conf_student_discount').value);
+    appSettings.discounts.student_from_2nd  = Number(document.getElementById('fee_conf_student_discount').value);
+    appSettings.discounts.discount_max_papers = Number(document.getElementById('fee_discount_max_papers').value) || 0;
 
     appSettings.award_fee = Number(document.getElementById('fee_award_base').value);
+    appSettings.inauguration_fee = Number(document.getElementById('fee_inauguration').value) || 0;
     appSettings.excursion_fees.local = Number(document.getElementById('fee_excursion_local').value);
     appSettings.excursion_fees.foreigner = Number(document.getElementById('fee_excursion_foreigner').value);
 
@@ -1376,6 +1414,11 @@ function saveSettings(e) {
         }
     }
     appSettings.journals = newJournals;
+
+    // Categories
+    saveCategoriesFromAdmin();
+    // Sessions
+    saveSessionsFromAdmin();
 
     // Persist
     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
@@ -1529,6 +1572,166 @@ function updateSubmitButtonState() {
         submitBtn.classList.add('btn-blocked');
         if (submitNote) submitNote.style.display = 'block';
     }
+}
+
+// ---- INAUGURATION HELPERS ----
+function showInauguration() {
+    const s = document.getElementById('inauguration-section');
+    if (s && appSettings.inauguration_fee > 0) s.classList.remove('hidden');
+}
+function hideInauguration() {
+    const s = document.getElementById('inauguration-section');
+    if (s) {
+        s.classList.add('hidden');
+        const chk = document.getElementById('includeInauguration');
+        if (chk) chk.checked = false;
+    }
+}
+
+// ---- FLEXIBLE CATEGORIES SETTINGS ----
+function renderCategoriesAdmin() {
+    const list = document.getElementById('categories-list');
+    if (!list) return;
+    list.innerHTML = '';
+    (appSettings.categories || []).forEach((cat, idx) => {
+        const div = document.createElement('div');
+        div.className = 'category-entry form-group';
+        div.style.cssText = 'display:grid;grid-template-columns:1fr 100px 100px 100px 36px;gap:8px;align-items:end;margin-bottom:8px;';
+        div.innerHTML = `
+            <div class="input-field"><label>Label</label><input type="text" class="cat-label" value="${cat.label}" required></div>
+            <div class="input-field"><label>Local (LKR)</label><input type="number" class="cat-fee-local" value="${cat.fee_local}" required></div>
+            <div class="input-field"><label>SAARC (USD)</label><input type="number" class="cat-fee-saarc" value="${cat.fee_saarc}" required></div>
+            <div class="input-field"><label>Non-SAARC (USD)</label><input type="number" class="cat-fee-nonsaarc" value="${cat.fee_nonsaarc}" required></div>
+            <button type="button" class="btn-remove-journal" onclick="removeCategory(${idx})" title="Remove"><i class='bx bx-trash'></i></button>
+        `;
+        list.appendChild(div);
+    });
+}
+
+window.removeCategory = function(idx) {
+    appSettings.categories.splice(idx, 1);
+    renderCategoriesAdmin();
+    rebuildCategoryDropdown();
+};
+
+function addCategoryField() {
+    if (!appSettings.categories) appSettings.categories = [];
+    appSettings.categories.push({ id: 'cat_' + Date.now(), label: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0 });
+    renderCategoriesAdmin();
+}
+
+function saveCategoriesFromAdmin() {
+    const labels  = document.querySelectorAll('#categories-list .cat-label');
+    const locals  = document.querySelectorAll('#categories-list .cat-fee-local');
+    const saarcs  = document.querySelectorAll('#categories-list .cat-fee-saarc');
+    const nsaarcs = document.querySelectorAll('#categories-list .cat-fee-nonsaarc');
+    const cats = [];
+    for (let i = 0; i < labels.length; i++) {
+        if (labels[i].value.trim()) {
+            cats.push({
+                id: appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
+                label: labels[i].value.trim(),
+                fee_local:    Number(locals[i].value)  || 0,
+                fee_saarc:    Number(saarcs[i].value)  || 0,
+                fee_nonsaarc: Number(nsaarcs[i].value) || 0
+            });
+        }
+    }
+    appSettings.categories = cats;
+    rebuildCategoryDropdown();
+}
+
+function rebuildCategoryDropdown() {
+    const sel = document.getElementById('attendeeCategory');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="" disabled selected>Select Category</option>';
+    (appSettings.categories || []).forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat.label;
+        opt.textContent = cat.label;
+        if (cat.label === cur) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+// ---- PRE-CONFERENCE SESSIONS SETTINGS ----
+function renderSessionsAdmin() {
+    const list = document.getElementById('sessions-list');
+    if (!list) return;
+    list.innerHTML = '';
+    (appSettings.pre_conference_sessions || []).forEach((sess, idx) => {
+        const div = document.createElement('div');
+        div.className = 'session-entry form-group';
+        div.style.cssText = 'display:grid;grid-template-columns:2fr 100px 100px 100px 36px;gap:8px;align-items:end;margin-bottom:8px;';
+        div.innerHTML = `
+            <div class="input-field"><label>Session Name</label><input type="text" class="sess-name" value="${sess.name}" required></div>
+            <div class="input-field"><label>Local (LKR)</label><input type="number" class="sess-fee-local" value="${sess.fee_local}" required></div>
+            <div class="input-field"><label>SAARC (USD)</label><input type="number" class="sess-fee-saarc" value="${sess.fee_saarc}" required></div>
+            <div class="input-field"><label>Non-SAARC (USD)</label><input type="number" class="sess-fee-nonsaarc" value="${sess.fee_nonsaarc}" required></div>
+            <button type="button" class="btn-remove-journal" onclick="removeSession(${idx})" title="Remove"><i class='bx bx-trash'></i></button>
+        `;
+        list.appendChild(div);
+    });
+}
+
+window.removeSession = function(idx) {
+    appSettings.pre_conference_sessions.splice(idx, 1);
+    renderSessionsAdmin();
+    rebuildSessionCheckboxes();
+};
+
+function addSessionField() {
+    if (!appSettings.pre_conference_sessions) appSettings.pre_conference_sessions = [];
+    appSettings.pre_conference_sessions.push({ id: 'sess_' + Date.now(), name: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0 });
+    renderSessionsAdmin();
+}
+
+function saveSessionsFromAdmin() {
+    const names  = document.querySelectorAll('#sessions-list .sess-name');
+    const locals  = document.querySelectorAll('#sessions-list .sess-fee-local');
+    const saarcs  = document.querySelectorAll('#sessions-list .sess-fee-saarc');
+    const nsaarcs = document.querySelectorAll('#sessions-list .sess-fee-nonsaarc');
+    const sessions = [];
+    for (let i = 0; i < names.length; i++) {
+        if (names[i].value.trim()) {
+            sessions.push({
+                id: appSettings.pre_conference_sessions[i]?.id || 'sess_' + Date.now() + i,
+                name: names[i].value.trim(),
+                fee_local:    Number(locals[i].value)  || 0,
+                fee_saarc:    Number(saarcs[i].value)  || 0,
+                fee_nonsaarc: Number(nsaarcs[i].value) || 0
+            });
+        }
+    }
+    appSettings.pre_conference_sessions = sessions;
+    rebuildSessionCheckboxes();
+}
+
+function rebuildSessionCheckboxes() {
+    const container = document.getElementById('preconf-sessions-container');
+    if (!container) return;
+    const sessions = appSettings.pre_conference_sessions || [];
+    if (sessions.length === 0) {
+        container.innerHTML = '';
+        container.closest('#preconf-sessions-section')?.classList.add('hidden');
+        return;
+    }
+    container.closest('#preconf-sessions-section')?.classList.remove('hidden');
+    container.innerHTML = '';
+    sessions.forEach(sess => {
+        const div = document.createElement('div');
+        div.className = 'form-checkbox mb-2';
+        div.innerHTML = `
+            <input type="checkbox" id="sess_${sess.id}" name="PreConf_${sess.id}" class="preconf-session-check price-trigger" data-sess-id="${sess.id}">
+            <label for="sess_${sess.id}">${sess.name}</label>
+        `;
+        container.appendChild(div);
+    });
+    // Re-attach price-trigger listeners
+    container.querySelectorAll('.price-trigger').forEach(el => {
+        el.addEventListener('change', calculateTotalFee);
+    });
 }
 
 // Run init
