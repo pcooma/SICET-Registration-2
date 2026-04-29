@@ -348,9 +348,6 @@ function setupEventListeners() {
     // Returning registrant — lookup by ref ID
     document.getElementById('btn-lookup-ref')?.addEventListener('click', handleRefLookup);
 
-    // Step 1 — Save & get ref ID
-    document.getElementById('btn-step1')?.addEventListener('click', handleStep1);
-
     // Form Submission (Step 2)
     registrationForm.addEventListener('submit', handleFormSubmit);
 
@@ -790,51 +787,6 @@ function populateFormFromData(data) {
 }
 
 // STEP 1 — Save draft + get Ref ID (no payment proof required)
-async function handleStep1(e) {
-    e?.preventDefault();
-    const isMain     = document.getElementById('toggleMain').checked;
-    const isAward    = document.getElementById('toggleAward').checked;
-    const isExcursion = document.getElementById('toggleExcursion').checked;
-    const isPreConf  = document.getElementById('togglePreConf')?.checked || false;
-    if (!isMain && !isAward && !isExcursion && !isPreConf) {
-        showToast('Please select at least one registration type.', 'error'); return;
-    }
-    if (isExcursion) {
-        const lc = parseInt(document.getElementById('excursionLocalCount').value) || 0;
-        const fc = parseInt(document.getElementById('excursionForeignCount').value) || 0;
-        if (lc === 0 && fc === 0) { showToast('Please specify at least one excursion ticket.', 'error'); return; }
-    }
-
-    // Generate or reuse reference ID
-    let refId = document.getElementById('reg-ref-id')?.textContent?.trim();
-    if (!refId || refId === '—') {
-        refId = 'SICET2026-' + Date.now().toString().slice(-7);
-    }
-
-    const dataObj = collectFormData(refId);
-    dataObj['Status'] = 'Pending Payment';
-
-    const studentIdInput = document.getElementById('studentId');
-    if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
-
-    const btn1 = document.getElementById('btn-step1');
-    if (btn1) { btn1.disabled = true; btn1.innerHTML = '<span>Saving…</span><i class="bx bx-loader bx-spin"></i>'; }
-
-    const ok = await submitToGoogleDrive(dataObj);
-
-    if (btn1) { btn1.disabled = false; btn1.innerHTML = '<span>Save & Get Reference ID</span><i class="bx bx-save"></i>'; }
-    if (!ok) return;
-
-    // Show the reference ID and reveal Step 2
-    showRefId(refId);
-    const step2 = document.getElementById('step2-section');
-    if (step2) step2.classList.remove('hidden');
-    step2?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    saveDraft();
-    showToast(`Reference ID: ${refId} — now proceed to make payment, then complete Step 2.`, 'success');
-}
-
 // STEP 2 — Upload payment proof and finalize
 async function handleFormSubmit(e) {
     e.preventDefault();
@@ -1248,7 +1200,9 @@ function generateInvoice() {
         })();
     }
 
-    // Scroll to ref ID box so user sees it highlighted
+    // Reveal Step 2 and scroll to ref ID box
+    const step2 = document.getElementById('step2-section');
+    if (step2) step2.classList.remove('hidden');
     document.querySelector('.payment-section.mt-4')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     showToast(`Invoice downloaded! Reference ID: ${refId} — please save this!`, 'success');
 }

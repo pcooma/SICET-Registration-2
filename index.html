@@ -426,9 +426,9 @@
                         </div>
                     </div>
 
-                    <!-- STEP 1 — Save & Get Reference ID -->
+                    <!-- STEP 1 — Payment & Reference ID -->
                     <div class="payment-section mt-4">
-                        <h3 class="section-title"><strong style="color:var(--accent);">Step 1</strong> — Save Registration &amp; Get Reference ID</h3>
+                        <h3 class="section-title"><strong style="color:var(--accent);">Step 1</strong> — Download Invoice &amp; Make Payment</h3>
 
                         <div class="highlight-box" style="background:rgba(0,120,200,0.06);border:1px solid rgba(0,150,255,0.25);margin-bottom:18px;padding:14px 18px;">
                             <h4 style="color:#4a9eff;margin-bottom:10px;font-size:0.93rem;"><i class='bx bx-info-circle' style="margin-right:6px;"></i>Payment Methods &amp; Policies</h4>
@@ -444,10 +444,9 @@
                             <p style="margin:0;color:var(--text-muted);font-size:0.93rem;line-height:2.2;">
                                 <i class='bx bx-list-check' style="color:var(--accent);margin-right:6px;vertical-align:middle;"></i>
                                 <strong style="color:var(--text-light);">How to complete your registration:</strong><br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">①</strong> Fill in all details above and download the Proforma Invoice.<br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">②</strong> Click <strong style="color:var(--accent);">"Save &amp; Get Reference ID"</strong> — your details are saved and a unique Reference ID is issued.<br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">③</strong> Make payment using the instructions below. Use your Reference ID as the payment description.<br>
-                                &nbsp;&nbsp;<strong style="color:var(--accent);">④</strong> Upload your receipt in <strong>Step 2</strong> below and click <strong>Submit Registration</strong>.
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">①</strong> Fill in all details above and click <strong style="color:var(--accent);">"Download Proforma Invoice"</strong> — your Reference ID is generated automatically.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">②</strong> Make payment using the instructions below. Use your Reference ID as the payment description.<br>
+                                &nbsp;&nbsp;<strong style="color:var(--accent);">③</strong> Upload your receipt in <strong>Step 2</strong> below and click <strong>Submit Registration</strong>.
                             </p>
                         </div>
 
@@ -462,7 +461,7 @@
                                         <i class='bx bx-copy-alt'></i> Copy
                                     </button>
                                 </div>
-                                <div id="ref-id-hint" style="font-size:0.78rem;color:var(--text-muted);">Generated when you download the invoice or click "Save &amp; Get Reference ID" below</div>
+                                <div id="ref-id-hint" style="font-size:0.78rem;color:var(--text-muted);">Generated automatically when you download the Proforma Invoice</div>
                             </div>
                         </div>
 
@@ -472,10 +471,6 @@
                                 placeholder="Any special requirements, accessibility needs, or additional information..."></textarea>
                         </div>
 
-                        <button type="button" class="btn btn-primary" id="btn-step1" style="width:100%;padding:13px;font-size:1rem;justify-content:center;margin-bottom:10px;">
-                            <span>Save &amp; Get Reference ID</span>
-                            <i class='bx bx-save'></i>
-                        </button>
                     </div>
 
                     <!-- STEP 2 — Upload Payment Proof & Submit -->
@@ -738,7 +733,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=29"></script>
+    <script src="app.js?v=30"></script>
 </body>
 
 </html>
