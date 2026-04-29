@@ -34,7 +34,8 @@ const defaultSettings = {
     ],
     chair_name: 'Dr. Gayashika Fernando',
     refund_deadline: 'August 23, 2025',
-    usd_to_lkr: 320
+    usd_to_lkr: 320,
+    apc_collection_active: false
 };
 
 // ---- GOOGLE DRIVE CONFIGURATION ----
@@ -50,10 +51,9 @@ const registrationForm = document.getElementById('registration-form');
 
 // Sections
 const sections = {
-    'Main Conference':        document.getElementById('section-main'),
-    'Excellence Award':       document.getElementById('section-award'),
-    'Excursion':              document.getElementById('section-excursion'),
-    'Pre-Conference Sessions': document.getElementById('section-preconf')
+    'Main Conference':  document.getElementById('section-main'),
+    'Excellence Award': document.getElementById('section-award'),
+    'Excursion':        document.getElementById('section-excursion')
 };
 
 // Navigation
@@ -110,6 +110,10 @@ function init() {
         if (appSettings.inauguration_fee === 0) appSettings.inauguration_fee = defaultSettings.inauguration_fee;
         settingsMigrated = true;
     }
+    if (!('apc_collection_active' in appSettings)) {
+        appSettings.apc_collection_active = defaultSettings.apc_collection_active;
+        settingsMigrated = true;
+    }
     if (settingsMigrated) localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
 
     updateAdminDashboard();
@@ -145,6 +149,15 @@ function setupEventListeners() {
                 } else {
                     sections[sectionName].classList.add('hidden');
                 }
+            }
+
+            // Pre-conference sessions block: visible when Main Conference OR Pre-Conference Only is selected
+            const sharedSess = document.getElementById('section-preconf-sessions');
+            if (sharedSess) {
+                const mainOn    = document.getElementById('toggleMain').checked;
+                const preconfOn = document.getElementById('togglePreConf').checked;
+                if (mainOn || preconfOn) sharedSess.classList.remove('hidden');
+                else sharedSess.classList.add('hidden');
             }
 
             // Check if any section is active to show the remaining form
@@ -197,6 +210,7 @@ function setupEventListeners() {
         const studentIdField      = document.getElementById('studentId');
         const studentIdSection    = document.getElementById('studentIdSection');
         const studentRequired     = document.querySelector('.student-required');
+        const designationGroup    = document.getElementById('designation-group');
 
         if (isNoPapers) {
             // No-papers category (e.g. Non-Author): hide papers and student ID
@@ -206,9 +220,10 @@ function setupEventListeners() {
             if (studentIdSection) studentIdSection.classList.add('hidden');
             if (studentIdField) studentIdField.required = false;
             if (studentRequired) studentRequired.classList.add('hidden');
+            if (designationGroup) designationGroup.classList.remove('hidden');
             hideInauguration();
         } else if (isStudentType) {
-            // Student-type: show papers + require student ID + show inauguration opt-in
+            // Student-type: show papers + require student ID + show inauguration opt-in + hide designation
             if (papersSection) papersSection.classList.remove('hidden');
             if (papersContainer) papersContainer.classList.remove('hidden');
             if (numberOfPapersInput) {
@@ -218,9 +233,10 @@ function setupEventListeners() {
             if (studentIdSection) studentIdSection.classList.remove('hidden');
             if (studentIdField) studentIdField.required = true;
             if (studentRequired) studentRequired.classList.remove('hidden');
+            if (designationGroup) designationGroup.classList.add('hidden');
             showInauguration();
         } else {
-            // Author/default: show papers, hide student ID
+            // Author/default: show papers, hide student ID, show designation
             if (papersSection) papersSection.classList.remove('hidden');
             if (papersContainer) papersContainer.classList.remove('hidden');
             if (numberOfPapersInput) {
@@ -230,6 +246,7 @@ function setupEventListeners() {
             if (studentIdSection) studentIdSection.classList.add('hidden');
             if (studentIdField) studentIdField.required = false;
             if (studentRequired) studentRequired.classList.add('hidden');
+            if (designationGroup) designationGroup.classList.remove('hidden');
             hideInauguration();
         }
 
@@ -372,6 +389,8 @@ function generatePaperBlocks(count) {
     const container = document.getElementById('dynamic-papers-container');
     container.innerHTML = '';
 
+    const apcActive = appSettings.apc_collection_active;
+
     // Create journal options string
     let journalOptions = '<option value="" disabled selected>Select Journal</option>';
     appSettings.journals.forEach(j => {
@@ -385,9 +404,9 @@ function generatePaperBlocks(count) {
         block.innerHTML = `
             <h4 class="mb-3" style="font-size: 1.1rem; color: var(--accent);">Paper ${i} Details</h4>
             <div class="form-group row">
-                <div class="input-field col">
+                <div class="input-field col${apcActive ? '' : ' hidden'}">
                     <label for="paperId_${i}">Paper ID <span class="required">*</span></label>
-                    <input type="text" id="paperId_${i}" name="Paper_${i}_ID" placeholder="E.g. 195" required oninput="calculateTotalFee()">
+                    <input type="text" id="paperId_${i}" name="Paper_${i}_ID" placeholder="E.g. 195" ${apcActive ? 'required' : ''} oninput="calculateTotalFee()">
                 </div>
                 <div class="input-field col">
                     <label for="paperTitle_${i}">Title of the Paper <span class="required">*</span></label>
@@ -1355,6 +1374,10 @@ function populateSettingsForm() {
     const refundNotice = document.getElementById('notice-refund-deadline');
     if (refundNotice) refundNotice.textContent = appSettings.refund_deadline || 'August 23, 2025';
 
+    // APC collection active
+    const apcActiveEl = document.getElementById('setting_apc_active');
+    if (apcActiveEl) apcActiveEl.checked = appSettings.apc_collection_active || false;
+
     // Journals
     renderJournalsAdmin();
     // Categories & Sessions
@@ -1404,6 +1427,8 @@ function saveSettings(e) {
     appSettings.award_fee = Number(document.getElementById('fee_award_base').value);
     appSettings.inauguration_fee = Number(document.getElementById('fee_inauguration').value) || 0;
     appSettings.inauguration_fee_usd = Number(document.getElementById('fee_inauguration_usd').value) || 0;
+    const apcActiveEl = document.getElementById('setting_apc_active');
+    appSettings.apc_collection_active = apcActiveEl ? apcActiveEl.checked : false;
     appSettings.excursion_fees.local = Number(document.getElementById('fee_excursion_local').value);
     appSettings.excursion_fees.foreigner = Number(document.getElementById('fee_excursion_foreigner').value);
 
@@ -1441,6 +1466,8 @@ function saveSettings(e) {
 
     // Re-populate globals
     populateJournalsDropdown();
+    // Regenerate paper blocks so Paper ID visibility reflects the current APC collection state
+    generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
     showToast('Pricing Settings saved successfully!', 'success');
 }
 

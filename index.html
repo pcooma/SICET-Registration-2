@@ -183,7 +183,7 @@
                             <label for="nameCertificate">Name to Appear on Certificate (BLOCK LETTERS)</label>
                             <input type="text" id="nameCertificate" name="Certificate_Name" placeholder="JOHN DOE">
                         </div>
-                        <div class="form-group row">
+                        <div id="designation-group" class="form-group row">
                             <div class="input-field col">
                                 <label for="designation">Designation / Post</label>
                                 <input type="text" id="designation" name="Designation"
@@ -237,7 +237,14 @@
                         <!-- JS will populate Paper 1, 2, 3 here -->
                     </div>
 
-
+                    <!-- Shared Pre-Conference Sessions block — shown when Main Conference OR Pre-Conference toggle is checked -->
+                    <div id="section-preconf-sessions" class="dynamic-section hidden">
+                        <h3 class="section-title">Pre-Conference Sessions</h3>
+                        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:16px;">Select the workshop sessions you wish to attend before the main conference. These can be booked standalone or together with the Main Conference registration.</p>
+                        <div id="preconf-sessions-section" class="hidden">
+                            <div id="preconf-sessions-container"></div>
+                        </div>
+                    </div>
 
                     <!-- 3. Excellence Award -->
                     <div id="section-award" class="dynamic-section hidden">
@@ -317,15 +324,6 @@
                                     <option value="Historical Sites">Historical Sites</option>
                                 </select>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- 4. Pre-Conference Sessions -->
-                    <div id="section-preconf" class="dynamic-section hidden">
-                        <h3 class="section-title">Pre-Conference Sessions</h3>
-                        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:16px;">Select the workshop sessions you wish to attend before the main conference. These can be booked standalone or together with the Main Conference registration.</p>
-                        <div id="preconf-sessions-section" class="hidden">
-                            <div id="preconf-sessions-container"></div>
                         </div>
                     </div>
 
@@ -653,6 +651,14 @@
                     <!-- APC Journals Config -->
                     <div class="settings-card full-width">
                         <h3><i class='bx bx-book'></i> APC Journals & Fees</h3>
+                        <div class="settings-group">
+                            <h4>APC Fee Collection Status</h4>
+                            <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:8px;">Enable once authors have received their Paper IDs and you are ready to collect APC fees. Until enabled, the Paper ID field is hidden from registrants.</p>
+                            <div class="form-checkbox">
+                                <input type="checkbox" id="setting_apc_active">
+                                <label for="setting_apc_active" style="font-weight:500;">Enable APC fee collection (makes Paper ID field visible to registrants)</label>
+                            </div>
+                        </div>
                         <div class="journals-list" id="journals-list">
                             <!-- Dynamic journals -->
                         </div>
@@ -712,7 +718,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=25"></script>
+    <script src="app.js?v=26"></script>
 </body>
 
 </html>
