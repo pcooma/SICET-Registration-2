@@ -691,8 +691,16 @@ async function handleRefLookup() {
         const res = await fetch(url);
         const result = await res.json();
 
+        console.log('Ref lookup GAS response:', result);
+
+        // Detect un-redeployed GAS (returns health-check object instead of lookup result)
+        if (result.status === 'SICET 2026 Registration API running') {
+            showToast('Server not updated — please redeploy the Google Apps Script.', 'error');
+            return;
+        }
+
         if (!result.success || !result.data) {
-            showToast('Reference ID not found. Please check and try again.', 'error');
+            showToast(result.error || 'Reference ID not found. Please check and try again.', 'error');
             return;
         }
 
@@ -701,10 +709,8 @@ async function handleRefLookup() {
         // Show ref ID
         showRefId(refId);
 
-        // Show step 2 whenever a ref ID exists — user may need to upload payment or resubmit
-        if (['Pending Payment', 'Submitted'].includes(result.data.Status)) {
-            document.getElementById('step2-section')?.classList.remove('hidden');
-        }
+        // Reveal Step 2 for any saved registration
+        document.getElementById('step2-section')?.classList.remove('hidden');
 
         showToast(`Registration loaded for ${result.data.Full_Name || refId}`, 'success');
         document.getElementById('remaining-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1190,7 +1196,7 @@ function generateInvoice() {
         (async () => {
             try {
                 const dataObj = collectFormData(refId);
-                if (!dataObj.Status) dataObj.Status = 'Draft';
+                dataObj.Status = 'Pending Payment';
                 const studentIdInput = document.getElementById('studentId');
                 if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
                 await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataObj) });

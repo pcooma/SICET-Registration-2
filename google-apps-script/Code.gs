@@ -287,7 +287,11 @@ function getRegistrationByRef(refId) {
     if (folder.getName().startsWith(refId + '_')) {
       const files = folder.getFilesByName('registration_data.json');
       if (files.hasNext()) {
-        return JSON.parse(files.next().getBlob().getDataAsString());
+        try {
+          return JSON.parse(files.next().getBlob().getDataAsString());
+        } catch (_) {
+          // Corrupted JSON in this folder — keep searching other folders
+        }
       }
     }
   }
