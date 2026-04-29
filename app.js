@@ -151,13 +151,27 @@ function setupEventListeners() {
                 }
             }
 
-            // Pre-conference sessions block: visible when Main Conference OR Pre-Conference Only is selected
+            // Pre-conference sessions block: visible when Main or Pre-Conf toggle is on AND sessions are configured
             const sharedSess = document.getElementById('section-preconf-sessions');
             if (sharedSess) {
                 const mainOn    = document.getElementById('toggleMain').checked;
                 const preconfOn = document.getElementById('togglePreConf').checked;
-                if (mainOn || preconfOn) sharedSess.classList.remove('hidden');
+                const hasSessions = (appSettings.pre_conference_sessions || []).length > 0;
+                if ((mainOn || preconfOn) && hasSessions) sharedSess.classList.remove('hidden');
                 else sharedSess.classList.add('hidden');
+            }
+
+            // Paper blocks: only visible when Main Conference is selected and category has papers
+            const mainChecked    = document.getElementById('toggleMain').checked;
+            const papersContainer = document.getElementById('dynamic-papers-container');
+            if (papersContainer) {
+                if (!mainChecked) {
+                    papersContainer.classList.add('hidden');
+                } else {
+                    const cat    = document.getElementById('attendeeCategory').value;
+                    const catDef = (appSettings.categories || []).find(c => c.label === cat);
+                    if (!catDef?.no_papers) papersContainer.classList.remove('hidden');
+                }
             }
 
             // Check if any section is active to show the remaining form
@@ -687,15 +701,17 @@ async function handleRefLookup() {
 
         populateFormFromData(result.data);
 
+        // Show ref ID
         const refEl = document.getElementById('reg-ref-id');
         if (refEl) refEl.textContent = refId;
 
-        if (result.data.Status === 'Submitted') {
+        // Show step 2 whenever a ref ID exists — user may need to upload payment or resubmit
+        if (['Pending Payment', 'Submitted'].includes(result.data.Status)) {
             document.getElementById('step2-section')?.classList.remove('hidden');
         }
 
         showToast(`Registration loaded for ${result.data.Full_Name || refId}`, 'success');
-        document.getElementById('reg-ref-id')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('remaining-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {
         showToast('Could not connect to server. Please check your connection and try again.', 'error');
         console.error('Ref lookup error:', err);
@@ -705,50 +721,71 @@ async function handleRefLookup() {
 }
 
 function populateFormFromData(data) {
-    // 1. Registration type toggles first so sections appear
+    // 0. Reset active toggles so stale sections don't linger
+    document.querySelectorAll('.section-toggle').forEach(t => {
+        if (t.checked) { t.checked = false; t.dispatchEvent(new Event('change')); }
+    });
+    document.getElementById('dynamic-papers-container').innerHTML = '';
+
+    // 1. Fire registration-type toggles first so all dependent sections appear
     const typeKeyMap = {
-        'Main':                  'Registering_Main',
-        'Award':                 'Registering_Award',
-        'Excursion':             'Registering_Excursion',
-        'Pre-Conference':        'Registering_PreConf'
+        'Main':           'Registering_Main',
+        'Award':          'Registering_Award',
+        'Excursion':      'Registering_Excursion',
+        'Pre-Conference': 'Registering_PreConf'
     };
     const regType = data.Registration_Type || '';
     Object.entries(typeKeyMap).forEach(([key, name]) => {
         const el = document.querySelector(`[name="${name}"]`);
-        if (el && regType.includes(key)) {
-            el.checked = true;
-            el.dispatchEvent(new Event('change'));
-        }
+        if (el && regType.includes(key)) { el.checked = true; el.dispatchEvent(new Event('change')); }
     });
 
-    // 2. Generate paper blocks before populating paper fields
-    const numPapers = parseInt(data.Number_of_Papers) || 1;
-    const numPapersEl = document.getElementById('numberOfPapers');
-    if (numPapersEl && !isNaN(parseInt(data.Number_of_Papers))) {
-        numPapersEl.value = numPapers;
-        generatePaperBlocks(numPapers);
+    // 2. Generate paper blocks before populating paper-level fields
+    if (data.Number_of_Papers) {
+        const numPapers = parseInt(data.Number_of_Papers) || 1;
+        const numPapersEl = document.getElementById('numberOfPapers');
+        if (numPapersEl) { numPapersEl.value = numPapers; generatePaperBlocks(numPapers); }
     }
 
-    // 3. Populate all text / select fields by matching the data key to the form field name
     const skip = new Set([
         'Registration_Type', 'Number_of_Papers', 'Calculated_Total_Fee', 'Currency',
         'Submission_Date', 'Invoice_ID', 'Status', 'Drive_Folder_URL',
-        'Student_ID_Base64', 'Payment_Proof_Base64', 'action'
+        'Student_ID_Base64', 'Payment_Proof_Base64', 'action',
+        'Registering_Main', 'Registering_Award', 'Registering_Excursion', 'Registering_PreConf'
     ]);
+
+    // 3. Populate every field by type — radio → checkbox → text/select
     Object.entries(data).forEach(([key, value]) => {
         if (skip.has(key) || value === '' || value == null) return;
-        const el = registrationForm.querySelector(`[name="${key}"]`);
-        if (el && el.type !== 'file' && el.type !== 'checkbox') {
-            el.value = value;
+
+        // Radio buttons (e.g. Bill_To: Personal / Organization)
+        const radios = registrationForm.querySelectorAll(`[name="${key}"][type="radio"]`);
+        if (radios.length > 0) {
+            radios.forEach(r => {
+                if (r.value === String(value)) { r.checked = true; r.dispatchEvent(new Event('change')); }
+            });
+            return;
         }
+
+        // Checkboxes — APC toggles, pre-conf session checkboxes, etc.
+        const boxes = registrationForm.querySelectorAll(`[name="${key}"][type="checkbox"]`);
+        if (boxes.length > 0) {
+            const checked = (value === true || value === 'true' || value === 'on');
+            boxes.forEach(cb => { cb.checked = checked; if (checked) cb.dispatchEvent(new Event('change')); });
+            return;
+        }
+
+        // Text / select / textarea / number
+        const el = registrationForm.querySelector(`[name="${key}"]`);
+        if (el && el.type !== 'file') el.value = value;
     });
 
-    // 4. Trigger change events so dependent visibility logic fires
-    const regionEl = document.getElementById('attendeeRegion');
-    if (regionEl && regionEl.value) regionEl.dispatchEvent(new Event('change'));
-
-    const catEl = document.getElementById('attendeeCategory');
-    if (catEl && catEl.value) catEl.dispatchEvent(new Event('change'));
+    // 4. Trigger cascading visibility updates (region hides/shows country + excursion fields,
+    //    category hides/shows designation, student ID, inauguration, paper discount hint)
+    ['attendeeRegion', 'attendeeCategory'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.value) el.dispatchEvent(new Event('change'));
+    });
 
     calculateTotalFee();
 }
@@ -1292,11 +1329,20 @@ function restoreDraft() {
             continue; // Already handled
         }
 
+        // Radio buttons (e.g. Bill_To) — must match by value, not set .value on the element
+        const radios = registrationForm.querySelectorAll(`[name="${key}"][type="radio"]`);
+        if (radios.length > 0) {
+            radios.forEach(r => {
+                if (r.value === String(formDraft[key])) { r.checked = true; r.dispatchEvent(new Event('change')); }
+            });
+            continue;
+        }
+
         const el = registrationForm.querySelector(`[name="${key}"]`);
         if (el) {
             if (el.type === 'checkbox') {
                 el.checked = formDraft[key];
-                el.dispatchEvent(new Event('change')); // Trigger visibility
+                el.dispatchEvent(new Event('change'));
             } else {
                 el.value = formDraft[key];
             }
@@ -1866,6 +1912,7 @@ function rebuildSessionCheckboxes() {
     if (sessions.length === 0) {
         container.innerHTML = '';
         container.closest('#preconf-sessions-section')?.classList.add('hidden');
+        document.getElementById('section-preconf-sessions')?.classList.add('hidden');
         return;
     }
     container.closest('#preconf-sessions-section')?.classList.remove('hidden');
