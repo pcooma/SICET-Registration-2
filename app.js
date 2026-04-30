@@ -69,12 +69,15 @@ const adminSection = document.getElementById('admin-section');
 const settingsSection = document.getElementById('settings-section');
 
 // Admin Elements
-const tableBody = document.getElementById('table-body');
-const statTotal = document.getElementById('stat-total');
-const statMain = document.getElementById('stat-main');
-const statAward = document.getElementById('stat-award');
-const btnClear = document.getElementById('btn-clear');
-const btnExport = document.getElementById('btn-export');
+const tableBody   = document.getElementById('table-body');
+const statTotal   = document.getElementById('stat-total');
+const statMain    = document.getElementById('stat-main');
+const statAward   = document.getElementById('stat-award');
+const btnClear    = document.getElementById('btn-clear');
+const btnExport   = document.getElementById('btn-export');
+
+// Dashboard state
+let dashFilteredRows = [];
 
 // Form Price Calculation Elements
 const remainingForm = document.getElementById('remaining-form');
@@ -389,8 +392,32 @@ function setupEventListeners() {
     registrationForm.addEventListener('change', debounce(saveDraft, 500));
 
     // Admin Actions
-    btnClear.addEventListener('click', clearData);
+    btnClear.addEventListener('click', loadFromGoogleDrive);
     btnExport.addEventListener('click', exportToExcel);
+
+    // Dashboard tabs
+    document.querySelectorAll('.dash-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.dash-tab-content').forEach(c => c.classList.add('hidden'));
+            tab.classList.add('active');
+            document.getElementById('dash-tab-' + tab.dataset.tab).classList.remove('hidden');
+        });
+    });
+
+    // Search & filter
+    ['dash-search', 'dash-filter-cat', 'dash-filter-region', 'dash-filter-status'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', applyDashFilters);
+        document.getElementById(id)?.addEventListener('change', applyDashFilters);
+    });
+
+    // Record detail modal close
+    document.getElementById('record-modal-close').addEventListener('click', () => {
+        document.getElementById('record-detail-modal').classList.add('hidden');
+    });
+    document.getElementById('record-detail-modal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) document.getElementById('record-detail-modal').classList.add('hidden');
+    });
 
     // Settings Actions
     document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
@@ -1636,44 +1663,357 @@ function closeLoginModal() {
 // ---- ADMIN DASHBOARD LOGIC ----
 
 function updateAdminDashboard() {
-    statTotal.textContent = submissions.length;
+    // ---- Summary Stats ----
+    const total      = submissions.length;
+    const localCount = submissions.filter(s => s.Attendee_Region === 'Local').length;
+    const saarcCount = submissions.filter(s => s.Attendee_Region === 'SAARC').length;
+    const nonSaarc   = submissions.filter(s => s.Attendee_Region === 'Non-SAARC').length;
+    const mainCount  = submissions.filter(s => s.Registration_Type && s.Registration_Type.includes('Main')).length;
+    const awardExc   = submissions.filter(s => s.Registration_Type && (s.Registration_Type.includes('Award') || s.Registration_Type.includes('Excursion'))).length;
 
-    const mainCount = submissions.filter(s => s.Registration_Type && s.Registration_Type.includes('Main')).length;
-    statMain.textContent = mainCount;
+    let totalPapers = 0;
+    let totalExcPax = 0;
+    submissions.forEach(s => {
+        totalPapers  += parseInt(s.Number_of_Papers)  || 0;
+        totalExcPax  += (parseInt(s.Excursion_Local_Count) || 0) + (parseInt(s.Excursion_Foreign_Count) || 0);
+    });
 
-    const awardExcursionCount = submissions.filter(s =>
-        s.Registration_Type && (s.Registration_Type.includes('Award') || s.Registration_Type.includes('Excursion'))
-    ).length;
-    statAward.textContent = awardExcursionCount;
+    statTotal.textContent = total;
+    statMain.textContent  = mainCount;
+    statAward.textContent = awardExc;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('stat-local',         localCount);
+    set('stat-saarc',         saarcCount);
+    set('stat-nonsaarc',      nonSaarc);
+    set('stat-papers',        totalPapers);
+    set('stat-excursion-pax', totalExcPax);
 
+    // Last loaded timestamp
+    if (total > 0) {
+        const now = new Date();
+        document.getElementById('dash-last-loaded').innerHTML =
+            `<strong>${total}</strong> registration(s) loaded — last refreshed ${now.toLocaleTimeString()}.`;
+    }
+
+    // Populate filter dropdowns
+    const cats     = [...new Set(submissions.map(s => s.Attendee_Category).filter(Boolean))].sort();
+    const statuses = [...new Set(submissions.map(s => s.Status).filter(Boolean))].sort();
+    const catSel   = document.getElementById('dash-filter-cat');
+    const statSel  = document.getElementById('dash-filter-status');
+    if (catSel) {
+        const prev = catSel.value;
+        catSel.innerHTML = '<option value="">All Categories</option>' +
+            cats.map(c => `<option value="${c}" ${c === prev ? 'selected' : ''}>${c}</option>`).join('');
+    }
+    if (statSel) {
+        const prev = statSel.value;
+        statSel.innerHTML = '<option value="">All Statuses</option>' +
+            statuses.map(s => `<option value="${s}" ${s === prev ? 'selected' : ''}>${s}</option>`).join('');
+    }
+
+    renderOverviewTab();
+    renderLogisticsTab();
+    applyDashFilters(); // renders records tab
+}
+
+// ---- Breakdown helper: count occurrences of field values ----
+function buildBreakdown(data, keyFn, label = 'Item') {
+    const counts = {};
+    data.forEach(s => {
+        const k = (typeof keyFn === 'function' ? keyFn(s) : s[keyFn]) || '(not set)';
+        counts[k] = (counts[k] || 0) + 1;
+    });
+    const total = data.length || 1;
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (sorted.length === 0) return '<p style="color:var(--text-muted);font-size:0.85rem;">No data.</p>';
+    return `<table class="dash-breakdown-table"><tbody>` +
+        sorted.map(([k, n]) =>
+            `<tr>
+                <td class="bk-label">${escHtml(k)}</td>
+                <td class="bk-count">${n}</td>
+                <td class="bk-bar-cell"><div class="dash-bar"><div class="dash-bar-fill" style="width:${Math.round((n/total)*100)}%"></div></div></td>
+            </tr>`
+        ).join('') +
+        `</tbody></table>`;
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ---- Overview Tab ----
+function renderOverviewTab() {
+    const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    set('dash-category-breakdown', buildBreakdown(submissions, 'Attendee_Category'));
+    set('dash-region-breakdown',   buildBreakdown(submissions, s => `${s.Attendee_Region || '?'} — ${s.Country || '?'}`));
+    set('dash-regtype-breakdown',  buildBreakdown(submissions, 'Registration_Type'));
+    set('dash-status-breakdown',   buildBreakdown(submissions, 'Status'));
+
+    // Sessions: parse comma-separated session names stored in Additional_Info or use Registration_Type
+    // Sessions are stored as pre-conference inclusions — we count unique session references in any field
+    const sessionCounts = {};
+    (appSettings.pre_conference_sessions || []).forEach(sess => {
+        submissions.forEach(sub => {
+            const info = JSON.stringify(sub);
+            if (info.includes(sess.name)) {
+                sessionCounts[sess.name] = (sessionCounts[sess.name] || 0) + 1;
+            }
+        });
+    });
+    const sessEntries = Object.entries(sessionCounts).sort((a,b) => b[1]-a[1]);
+    const sessHtml = sessEntries.length === 0
+        ? '<p style="color:var(--text-muted);font-size:0.85rem;">No pre-conference session data yet.</p>'
+        : `<table class="dash-breakdown-table"><tbody>` +
+          sessEntries.map(([n, c]) =>
+            `<tr><td class="bk-label">${escHtml(n)}</td><td class="bk-count">${c} attendees</td>
+             <td class="bk-bar-cell"><div class="dash-bar"><div class="dash-bar-fill" style="width:${Math.round((c/submissions.length)*100)}%"></div></div></td></tr>`
+          ).join('') + `</tbody></table>`;
+    set('dash-sessions-breakdown', sessHtml);
+}
+
+// ---- Logistics Tab ----
+function renderLogisticsTab() {
+    const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+
+    // Food
+    set('dash-food-breakdown', buildBreakdown(submissions, 'Food_Preference'));
+
+    // Excursion
+    let excLocal = 0, excForeign = 0;
+    const mobilityMap = {}, activityMap = {};
+    submissions.forEach(s => {
+        excLocal   += parseInt(s.Excursion_Local_Count)   || 0;
+        excForeign += parseInt(s.Excursion_Foreign_Count) || 0;
+        if (s.Excursion_Mobility && s.Excursion_Mobility !== '0' && s.Excursion_Mobility !== '') {
+            mobilityMap[s.Excursion_Mobility] = (mobilityMap[s.Excursion_Mobility] || 0) + 1;
+        }
+        if (s.Excursion_Activity && s.Excursion_Activity !== '0' && s.Excursion_Activity !== '') {
+            activityMap[s.Excursion_Activity] = (activityMap[s.Excursion_Activity] || 0) + 1;
+        }
+    });
+    const excHtml = logRow('Local Excursion Pax', excLocal) +
+        logRow('Foreign Excursion Pax', excForeign) +
+        logRow('Total Excursion Pax', excLocal + excForeign) +
+        (Object.keys(mobilityMap).length ?
+            '<div style="margin-top:10px;margin-bottom:4px;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Mobility Needs</div>' +
+            Object.entries(mobilityMap).map(([k,v]) => logRow(k, v)).join('') : '') +
+        (Object.keys(activityMap).length ?
+            '<div style="margin-top:10px;margin-bottom:4px;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;">Activity Preference</div>' +
+            Object.entries(activityMap).map(([k,v]) => logRow(k, v)).join('') : '');
+    set('dash-excursion-breakdown', excHtml || '<p style="color:var(--text-muted);font-size:0.85rem;">No excursion registrations.</p>');
+
+    // Inauguration
+    const inaugYes = submissions.filter(s => s.Include_Inauguration === true || s.Include_Inauguration === 'true' || s.Include_Inauguration === 'Yes').length;
+    const inaugNo  = submissions.length - inaugYes;
+    set('dash-inauguration-breakdown',
+        logRow('Opted In', inaugYes) +
+        logRow('Not Included', inaugNo));
+
+    // Countries
+    set('dash-countries-breakdown', buildBreakdown(submissions, 'Country'));
+
+    // Revenue
+    let revLKR = 0, revUSD = 0;
+    submissions.forEach(s => {
+        const fee = parseFloat(s.Calculated_Total_Fee) || 0;
+        if (s.Currency === 'LKR') revLKR += fee;
+        else if (s.Currency === 'USD') revUSD += fee;
+    });
+    const rate = appSettings.usd_to_lkr || 320;
+    const revHtml =
+        logRow('Total Revenue (LKR)', 'LKR ' + revLKR.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})) +
+        logRow('Total Revenue (USD)', 'USD ' + revUSD.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})) +
+        logRow('Combined Estimate (LKR)', 'LKR ' + (revLKR + revUSD * rate).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}));
+    set('dash-revenue-breakdown', revHtml);
+}
+
+function logRow(label, value) {
+    return `<div class="logistics-row"><span class="lr-label">${escHtml(String(label))}</span><span class="lr-value">${escHtml(String(value))}</span></div>`;
+}
+
+// ---- Records Tab with search + filter ----
+function applyDashFilters() {
+    const search    = (document.getElementById('dash-search')?.value || '').toLowerCase();
+    const catFilter = document.getElementById('dash-filter-cat')?.value || '';
+    const regFilter = document.getElementById('dash-filter-region')?.value || '';
+    const statFilter= document.getElementById('dash-filter-status')?.value || '';
+
+    dashFilteredRows = submissions.filter(s => {
+        if (catFilter  && s.Attendee_Category !== catFilter)  return false;
+        if (regFilter  && s.Attendee_Region   !== regFilter)  return false;
+        if (statFilter && s.Status            !== statFilter) return false;
+        if (search) {
+            const blob = [s.Full_Name, s.Email, s.Invoice_ID, s.Organization,
+                          s.Country, s.Phone, s.Transaction_Ref].join(' ').toLowerCase();
+            if (!blob.includes(search)) return false;
+        }
+        return true;
+    });
+
+    const countEl = document.getElementById('dash-record-count');
+    if (countEl) countEl.textContent = dashFilteredRows.length + ' of ' + submissions.length + ' record(s)';
+
+    renderRecordsTable(dashFilteredRows);
+}
+
+function renderRecordsTable(rows) {
     tableBody.innerHTML = '';
-
     if (submissions.length === 0) {
-        tableBody.innerHTML = '<tr class="empty-row"><td colspan="5">No data loaded yet — click <strong>Refresh from Drive</strong> to load registrations.</td></tr>';
+        tableBody.innerHTML = '<tr class="empty-row"><td colspan="13">Click <strong>Refresh from Drive</strong> to load registrations.</td></tr>';
+        return;
+    }
+    if (rows.length === 0) {
+        tableBody.innerHTML = '<tr class="empty-row"><td colspan="13">No registrations match your filter.</td></tr>';
         return;
     }
 
-    const reversedData = [...submissions].reverse();
-
-    reversedData.forEach(sub => {
+    const sorted = [...rows].reverse();
+    sorted.forEach((sub, i) => {
         const tr = document.createElement('tr');
+        tr.className = 'clickable-row';
+        const papers = parseInt(sub.Number_of_Papers) || 0;
+        const fee    = parseFloat(sub.Calculated_Total_Fee) || 0;
+        const dateStr = sub.Submission_Date ? String(sub.Submission_Date).split(',')[0].split('T')[0] : '—';
         tr.innerHTML = `
-            <td>${sub.Submission_Date.split(',')[0]}</td>
-            <td>${sub.Title || ''} ${sub.Full_Name || ''}</td>
-            <td>${sub.Email || ''}</td>
-            <td><span class="badge ${getCategoryBadge(sub.Registration_Type)}">${sub.Registration_Type || 'N/A'}</span></td>
-            <td>${sub.Organization || ''}</td>
+            <td style="color:var(--text-muted);font-size:0.8rem;">${sorted.length - i}</td>
+            <td style="white-space:nowrap;font-size:0.82rem;">${escHtml(dateStr)}</td>
+            <td style="font-size:0.78rem;color:var(--accent);font-family:monospace;">${escHtml(sub.Invoice_ID || '—')}</td>
+            <td><strong>${escHtml((sub.Title ? sub.Title + ' ' : '') + (sub.Full_Name || ''))}</strong><br><small style="color:var(--text-muted);">${escHtml(sub.Organization || '')}</small></td>
+            <td style="font-size:0.82rem;">${escHtml(sub.Email || '—')}</td>
+            <td><span class="badge ${getCatBadge(sub.Attendee_Category)}">${escHtml(sub.Attendee_Category || 'N/A')}</span></td>
+            <td style="font-size:0.82rem;">${escHtml(sub.Attendee_Region || '—')}</td>
+            <td style="font-size:0.82rem;">${escHtml(sub.Country || '—')}</td>
+            <td><span class="badge ${getRegTypeBadge(sub.Registration_Type)}" style="font-size:0.72rem;">${escHtml(sub.Registration_Type || 'N/A')}</span></td>
+            <td style="text-align:center;">${papers > 0 ? papers : '—'}</td>
+            <td style="white-space:nowrap;font-size:0.82rem;">${fee > 0 ? escHtml(sub.Currency || '') + ' ' + fee.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</td>
+            <td><span class="badge ${getStatusBadge(sub.Status)}">${escHtml(sub.Status || 'Submitted')}</span></td>
+            <td><button class="btn-detail">View</button></td>
         `;
+        tr.querySelector('.btn-detail').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openRecordModal(sub);
+        });
+        tr.addEventListener('click', () => openRecordModal(sub));
         tableBody.appendChild(tr);
     });
 }
 
-function getCategoryBadge(type) {
-    if (!type) return '';
+function getCatBadge(cat) {
+    if (!cat) return 'badge-default';
+    const c = cat.toLowerCase();
+    if (c.includes('author') && !c.includes('non')) return 'badge-main';
+    if (c.includes('student')) return 'badge-ok';
+    return 'badge-default';
+}
+
+function getRegTypeBadge(type) {
+    if (!type) return 'badge-default';
+    if (type.includes('Main') && type.includes('Award') || type.includes('Main') && type.includes('Excursion')) return 'badge-multi';
     if (type.includes('Main')) return 'badge-main';
     if (type.includes('Award')) return 'badge-award';
     if (type.includes('Excursion')) return 'badge-excursion';
-    return '';
+    return 'badge-default';
+}
+
+function getStatusBadge(s) {
+    if (!s) return 'badge-pending';
+    const l = s.toLowerCase();
+    if (l.includes('confirm') || l.includes('paid') || l.includes('approv')) return 'badge-ok';
+    if (l.includes('pending') || l.includes('submit')) return 'badge-pending';
+    return 'badge-default';
+}
+
+// ---- Record Detail Modal ----
+function openRecordModal(sub) {
+    document.getElementById('record-modal-title').textContent =
+        (sub.Title ? sub.Title + ' ' : '') + (sub.Full_Name || 'Registration') + ' — ' + (sub.Invoice_ID || '');
+
+    const sections = [
+        {
+            title: 'Personal Information',
+            fields: [
+                ['Title',             sub.Title],
+                ['Full Name',         sub.Full_Name],
+                ['Certificate Name',  sub.Certificate_Name],
+                ['Email',             sub.Email],
+                ['Phone',             sub.Phone],
+                ['Designation',       sub.Designation],
+                ['Organization',      sub.Organization],
+            ]
+        },
+        {
+            title: 'Registration Details',
+            fields: [
+                ['Reference ID',       sub.Invoice_ID],
+                ['Submission Date',    sub.Submission_Date],
+                ['Status',             sub.Status],
+                ['Attendee Category',  sub.Attendee_Category],
+                ['Region',             sub.Attendee_Region],
+                ['Country',            sub.Country],
+                ['Registration Type',  sub.Registration_Type],
+                ['Primary Reason',     sub.Primary_Reason + (sub.Primary_Reason_Other ? ' — ' + sub.Primary_Reason_Other : '')],
+            ]
+        },
+        {
+            title: 'Financial',
+            fields: [
+                ['Total Fee',          sub.Calculated_Total_Fee ? (sub.Currency + ' ' + parseFloat(sub.Calculated_Total_Fee).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})) : null],
+                ['Currency',           sub.Currency],
+                ['Transaction Ref',    sub.Transaction_Ref],
+                ['Drive Folder',       sub.Drive_Folder_URL ? `<a href="${escHtml(sub.Drive_Folder_URL)}" target="_blank" rel="noopener">Open in Drive</a>` : null],
+            ]
+        },
+        {
+            title: 'Academic / Papers',
+            fields: [
+                ['Number of Papers',   sub.Number_of_Papers],
+                ['Food Preference',    sub.Food_Preference],
+                ['Include Inauguration', sub.Include_Inauguration],
+            ]
+        },
+        {
+            title: 'Award Details',
+            fields: [
+                ['Company / Org Name', sub.Company_Name],
+                ['Participant Count',  sub.Participant_Count],
+                ['Award Category',     sub.Award_Category],
+            ]
+        },
+        {
+            title: 'Excursion Details',
+            fields: [
+                ['Local Pax',          sub.Excursion_Local_Count],
+                ['Foreign Pax',        sub.Excursion_Foreign_Count],
+                ['Mobility Needs',     sub.Excursion_Mobility],
+                ['Activity Preference',sub.Excursion_Activity],
+            ]
+        },
+        {
+            title: 'Additional Info',
+            fields: [
+                ['Notes', sub.Additional_Info],
+            ]
+        },
+    ];
+
+    const html = sections.map(sec => {
+        const filledFields = sec.fields.filter(([, v]) => v !== null && v !== undefined && v !== '');
+        if (filledFields.length === 0) return '';
+        return `<div class="record-section">
+            <div class="record-section-title">${escHtml(sec.title)}</div>
+            <div class="record-fields">
+                ${filledFields.map(([label, val]) =>
+                    `<div class="record-field">
+                        <div class="rf-label">${escHtml(label)}</div>
+                        <div class="rf-value">${val || '<span class="rf-empty">—</span>'}</div>
+                    </div>`
+                ).join('')}
+            </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('record-modal-body').innerHTML = html || '<p style="color:var(--text-muted);">No details available.</p>';
+    document.getElementById('record-detail-modal').classList.remove('hidden');
 }
 
 function exportToExcel() {
@@ -1681,37 +2021,23 @@ function exportToExcel() {
         showToast('No data to export!', 'error');
         return;
     }
-
     try {
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(submissions);
-        const wscols = [
-            { wch: 20 }, // Submission_Date
-            { wch: 10 }, // Title
-            { wch: 25 }, // Full_Name
-            { wch: 30 }, // Email
-            { wch: 20 }, // Phone
-            { wch: 25 }, // Organization
-            { wch: 20 }, // Registration_Type
-            { wch: 15 }, // Paper_ID
-            { wch: 40 }, // Paper_Title
+        // Column widths
+        ws['!cols'] = [
+            {wch:22},{wch:25},{wch:12},{wch:12},{wch:30},{wch:32},{wch:18},{wch:18},
+            {wch:18},{wch:10},{wch:15},{wch:12},{wch:20},{wch:10},{wch:25},{wch:20},
+            {wch:18},{wch:10},{wch:10},{wch:25},{wch:12},{wch:18},{wch:20},{wch:20},
+            {wch:12},{wch:14},{wch:20},{wch:20},{wch:20},{wch:35},{wch:40}
         ];
-        ws['!cols'] = wscols;
-
-        XLSX.utils.book_append_sheet(wb, ws, "Registrations");
-        XLSX.writeFile(wb, "SICET_2026_Registrations.xlsx");
-
-        showToast('Data exported to Excel successfully!', 'success');
-    } catch (error) {
-        console.error("Export Error: ", error);
+        XLSX.utils.book_append_sheet(wb, ws, 'Registrations');
+        XLSX.writeFile(wb, 'SICET_2026_Registrations.xlsx');
+        showToast('Exported ' + submissions.length + ' records to Excel.', 'success');
+    } catch (err) {
+        console.error('Export error:', err);
         showToast('Error exporting data. Please try again.', 'error');
     }
-}
-
-function clearData() {
-    submissions = [];
-    updateAdminDashboard();
-    showToast('Local view cleared. Click Refresh from Drive to reload.', 'success');
 }
 
 

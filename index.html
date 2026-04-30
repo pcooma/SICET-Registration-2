@@ -523,10 +523,12 @@
         <!-- Admin Dashboard Section -->
         <section id="admin-section" class="view-section hidden">
             <div class="admin-wrapper glass-panel">
+
+                <!-- Header -->
                 <div class="admin-header">
                     <div class="admin-title">
                         <h2>Registration Dashboard</h2>
-                        <p>Registrations are stored in Google Drive. Use Refresh to load them.</p>
+                        <p id="dash-last-loaded">Data not yet loaded — click <strong>Refresh from Drive</strong>.</p>
                     </div>
                     <div class="admin-actions">
                         <button id="btn-clear" class="btn btn-secondary btn-sm">
@@ -538,51 +540,139 @@
                     </div>
                 </div>
 
-                <div class="stats-row">
-                    <div class="stat-card">
-                        <i class='bx bx-file'></i>
-                        <div class="stat-info">
-                            <h4 id="stat-total">0</h4>
-                            <span>Total Registrations</span>
+                <!-- Stats Row -->
+                <div class="stats-row" id="dash-stats-row">
+                    <div class="stat-card"><i class='bx bx-group'></i><div class="stat-info"><h4 id="stat-total">0</h4><span>Total Registrations</span></div></div>
+                    <div class="stat-card"><i class='bx bx-map-pin'></i><div class="stat-info"><h4 id="stat-local">0</h4><span>Local (Sri Lanka)</span></div></div>
+                    <div class="stat-card"><i class='bx bx-globe'></i><div class="stat-info"><h4 id="stat-saarc">0</h4><span>SAARC Region</span></div></div>
+                    <div class="stat-card"><i class='bx bx-globe-alt'></i><div class="stat-info"><h4 id="stat-nonsaarc">0</h4><span>International</span></div></div>
+                    <div class="stat-card"><i class='bx bx-file-blank'></i><div class="stat-info"><h4 id="stat-main">0</h4><span>Main Conference</span></div></div>
+                    <div class="stat-card"><i class='bx bx-award'></i><div class="stat-info"><h4 id="stat-award">0</h4><span>Awards / Excursions</span></div></div>
+                    <div class="stat-card"><i class='bx bx-book-content'></i><div class="stat-info"><h4 id="stat-papers">0</h4><span>Papers Submitted</span></div></div>
+                    <div class="stat-card"><i class='bx bx-bus'></i><div class="stat-info"><h4 id="stat-excursion-pax">0</h4><span>Excursion Pax</span></div></div>
+                </div>
+
+                <!-- Dashboard Tabs -->
+                <div class="dash-tabs">
+                    <button class="dash-tab active" data-tab="overview"><i class='bx bx-pie-chart-alt-2'></i> Overview</button>
+                    <button class="dash-tab" data-tab="records"><i class='bx bx-table'></i> All Records</button>
+                    <button class="dash-tab" data-tab="logistics"><i class='bx bx-restaurant'></i> Catering & Logistics</button>
+                </div>
+
+                <!-- Tab: Overview -->
+                <div class="dash-tab-content" id="dash-tab-overview">
+                    <div class="dash-analysis-grid">
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-category'></i> By Attendee Category</h4>
+                            <div id="dash-category-breakdown"></div>
+                        </div>
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-map'></i> By Region / Country</h4>
+                            <div id="dash-region-breakdown"></div>
+                        </div>
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-task'></i> By Registration Type</h4>
+                            <div id="dash-regtype-breakdown"></div>
+                        </div>
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-check-circle'></i> By Status</h4>
+                            <div id="dash-status-breakdown"></div>
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <i class='bx bx-globe'></i>
-                        <div class="stat-info">
-                            <h4 id="stat-main">0</h4>
-                            <span>Main Conference</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <i class='bx bx-award'></i>
-                        <div class="stat-info">
-                            <h4 id="stat-award">0</h4>
-                            <span>Awards & Excursions</span>
+                    <div class="dash-analysis-grid" style="margin-top:1rem;">
+                        <div class="dash-analysis-card full-width-card">
+                            <h4><i class='bx bx-calendar-event'></i> Pre-Conference Sessions Attendance</h4>
+                            <div id="dash-sessions-breakdown"></div>
                         </div>
                     </div>
                 </div>
 
-                <div class="table-container">
-                    <table class="data-table" id="submissions-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Reg. Type</th>
-                                <th>Organization</th>
-                            </tr>
-                        </thead>
-                        <tbody id="table-body">
-                            <!-- Dynamic Rows -->
-                            <tr class="empty-row">
-                                <td colspan="5">No registrations found. Click "Refresh from Drive" to load submissions.</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <!-- Tab: All Records -->
+                <div class="dash-tab-content hidden" id="dash-tab-records">
+                    <div class="dash-search-bar">
+                        <i class='bx bx-search'></i>
+                        <input type="text" id="dash-search" placeholder="Search by name, email, ref ID, organization, country…">
+                        <select id="dash-filter-cat">
+                            <option value="">All Categories</option>
+                        </select>
+                        <select id="dash-filter-region">
+                            <option value="">All Regions</option>
+                            <option value="Local">Local</option>
+                            <option value="SAARC">SAARC</option>
+                            <option value="Non-SAARC">Non-SAARC</option>
+                        </select>
+                        <select id="dash-filter-status">
+                            <option value="">All Statuses</option>
+                        </select>
+                        <span id="dash-record-count" style="margin-left:auto;color:var(--text-muted);font-size:0.85rem;white-space:nowrap;"></span>
+                    </div>
+                    <div class="table-container" style="margin-top:1rem;">
+                        <table class="data-table" id="submissions-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Date</th>
+                                    <th>Ref ID</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Category</th>
+                                    <th>Region</th>
+                                    <th>Country</th>
+                                    <th>Reg. Type</th>
+                                    <th>Papers</th>
+                                    <th>Fee</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <tr class="empty-row"><td colspan="13">Click <strong>Refresh from Drive</strong> to load registrations.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
+
+                <!-- Tab: Catering & Logistics -->
+                <div class="dash-tab-content hidden" id="dash-tab-logistics">
+                    <div class="dash-analysis-grid">
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-food-menu'></i> Food / Meal Preferences</h4>
+                            <div id="dash-food-breakdown"></div>
+                        </div>
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-bus'></i> Excursion Details</h4>
+                            <div id="dash-excursion-breakdown"></div>
+                        </div>
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-microphone'></i> Inauguration Opt-ins</h4>
+                            <div id="dash-inauguration-breakdown"></div>
+                        </div>
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-world'></i> Countries Represented</h4>
+                            <div id="dash-countries-breakdown"></div>
+                        </div>
+                    </div>
+                    <div class="dash-analysis-grid" style="margin-top:1rem;">
+                        <div class="dash-analysis-card full-width-card">
+                            <h4><i class='bx bx-wallet'></i> Revenue Summary</h4>
+                            <div id="dash-revenue-breakdown"></div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </section>
+
+        <!-- Record Detail Modal -->
+        <div id="record-detail-modal" class="record-modal-overlay hidden" role="dialog">
+            <div class="record-modal-box">
+                <div class="record-modal-header">
+                    <h3 id="record-modal-title">Registration Details</h3>
+                    <button id="record-modal-close" class="record-modal-close" aria-label="Close"><i class='bx bx-x'></i></button>
+                </div>
+                <div id="record-modal-body" class="record-modal-body"></div>
+            </div>
+        </div>
 
         <!-- Admin Settings Section -->
         <section id="settings-section" class="view-section hidden">
@@ -781,7 +871,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=41"></script>
+    <script src="app.js?v=42"></script>
 </body>
 
 </html>
