@@ -186,6 +186,7 @@
                                 class="section-toggle price-trigger" value="Pre-Conference Sessions">
                             <label for="togglePreConf" style="font-weight: 600;">I am registering for Pre-Conference Sessions</label>
                         </div>
+                        <div id="reg-type-cost-preview"></div>
                     </div>
 
                     <!-- Dynamic paper blocks will be injected inside section-main -->
@@ -247,6 +248,8 @@
 
                     </div>
 
+                    <div id="apc-journal-preview"></div>
+
                     <!-- Dynamic Papers Container - hidden for Non-Authors -->
                     <div id="dynamic-papers-container" class="mt-4">
                         <!-- JS will populate Paper 1, 2, 3 here -->
@@ -256,6 +259,7 @@
                     <div id="section-preconf-sessions" class="dynamic-section hidden">
                         <h3 class="section-title">Pre-Conference Sessions</h3>
                         <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:16px;">Select the workshop sessions you wish to attend before the main conference. These can be booked standalone or together with the Main Conference registration.</p>
+                        <div id="preconf-cost-preview"></div>
                         <div id="preconf-sessions-section" class="hidden">
                             <div id="preconf-sessions-container"></div>
                         </div>
@@ -733,7 +737,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=33"></script>
+    <script src="app.js?v=34"></script>
 </body>
 
 </html>

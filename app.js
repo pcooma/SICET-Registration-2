@@ -125,6 +125,7 @@ function init() {
     setupEventListeners();
     updateSubmitButtonState();
     updateExcursionTicketVisibility();
+    updateCostPreviews();
 
     // Check for draft
     if (formDraft && Object.keys(formDraft).length > 0) {
@@ -504,7 +505,200 @@ function updateExcursionTicketVisibility() {
     calculateTotalFee();
 }
 
+// ---- COST PREVIEW TABLES ----
+
+function updateCostPreviews() {
+    const region   = document.getElementById('attendeeRegion')?.value  || '';
+    const category = document.getElementById('attendeeCategory')?.value || '';
+    const isLocal  = region === 'Local';
+    const isSAARC  = region === 'SAARC';
+    const hasRgn   = !!region;
+    const fxRate   = appSettings.usd_to_lkr || 320;
+    const dispCur  = hasRgn ? (isLocal ? 'LKR' : 'USD') : null;
+
+    const toDisp = (amount, fromCur) => {
+        if (!hasRgn) return null;
+        if (fromCur === dispCur) return amount;
+        return dispCur === 'LKR' ? Math.round(amount * fxRate) : Math.round(amount / fxRate);
+    };
+
+    _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, toDisp);
+    _previewApcJournals(hasRgn, dispCur, toDisp);
+    _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur);
+}
+
+function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, toDisp) {
+    const el = document.getElementById('reg-type-cost-preview');
+    if (!el) return;
+
+    const cats    = appSettings.categories || [];
+    const awdFee  = appSettings.award_fee || 0;                      // LKR native
+    const exclLoc = appSettings.excursion_fees?.local    || 0;       // LKR native
+    const exclFor = appSettings.excursion_fees?.foreigner || 0;      // LKR native
+
+    const tbl = 'width:100%;border-collapse:collapse;font-size:0.82rem;';
+    const thS = 'font-size:0.74rem;font-weight:500;color:var(--text-muted);padding:4px 6px 4px 0;';
+    const rb  = 'border-top:1px solid rgba(255,255,255,0.07);';
+
+    let rows = '';
+
+    if (!hasRgn) {
+        cats.forEach(cat => {
+            rows += `<tr style="${rb}">
+                <td style="padding:5px 6px 5px 0;color:var(--text-light);">Main Conf — ${cat.label}</td>
+                <td style="text-align:right;padding:5px 4px;color:var(--accent);">${cat.fee_local.toLocaleString('en-US')}</td>
+                <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${cat.fee_saarc}</td>
+                <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${cat.fee_nonsaarc}</td>
+            </tr>`;
+        });
+        const awUSD = Math.round(awdFee / fxRate);
+        const elUSD = Math.round(exclLoc / fxRate);
+        const efUSD = Math.round(exclFor / fxRate);
+        rows += `<tr style="${rb}">
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excellence Award <small style="color:var(--text-muted);">/pax</small></td>
+            <td style="text-align:right;padding:5px 4px;color:var(--accent);">${awdFee.toLocaleString('en-US')}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${awUSD}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${awUSD}</td>
+        </tr>
+        <tr style="${rb}">
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Local ticket</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--accent);">${exclLoc.toLocaleString('en-US')}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${elUSD}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${elUSD}</td>
+        </tr>
+        <tr style="${rb}">
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Foreign ticket</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--accent);">${exclFor.toLocaleString('en-US')}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${efUSD}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${efUSD}</td>
+        </tr>`;
+
+        el.innerHTML = `<div style="margin-top:12px;padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+            <div style="font-size:0.74rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+                <i class='bx bx-receipt' style="margin-right:4px;vertical-align:middle;"></i>Fee Reference — select Attendee Region above for personalised pricing
+            </div>
+            <table style="${tbl}"><thead><tr>
+                <th style="${thS}text-align:left;"></th>
+                <th style="${thS}text-align:right;">Local (LKR)</th>
+                <th style="${thS}text-align:right;">SAARC (USD)</th>
+                <th style="${thS}text-align:right;">Non-SAARC (USD)</th>
+            </tr></thead><tbody>${rows}</tbody></table>
+        </div>`;
+
+    } else {
+        cats.forEach(cat => {
+            const rawFee    = isLocal ? cat.fee_local : (isSAARC ? cat.fee_saarc : cat.fee_nonsaarc);
+            const nativeCur = isLocal ? 'LKR' : 'USD';
+            const dispFee   = toDisp(rawFee, nativeCur);
+            const active    = cat.label === category;
+            const hl  = active ? 'background:rgba(197,215,58,0.1);' : '';
+            const nC  = active ? 'color:var(--accent);font-weight:600;'  : 'color:var(--text-light);';
+            const vC  = active ? 'color:var(--accent);font-weight:700;'  : 'color:var(--text-light);';
+            rows += `<tr style="${rb}${hl}">
+                <td style="padding:5px 6px 5px 0;${nC}">Main Conf — ${cat.label}${active ? ' ✓' : ''}</td>
+                <td style="text-align:right;padding:5px 6px;${vC}">${dispFee?.toLocaleString('en-US')}</td>
+            </tr>`;
+        });
+        rows += `<tr style="${rb}">
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excellence Award <small style="color:var(--text-muted);">/pax</small></td>
+            <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(awdFee, 'LKR')?.toLocaleString('en-US')}</td>
+        </tr>
+        <tr style="${rb}">
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Local ticket</td>
+            <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclLoc, 'LKR')?.toLocaleString('en-US')}</td>
+        </tr>
+        <tr style="${rb}">
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Foreign ticket</td>
+            <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclFor, 'LKR')?.toLocaleString('en-US')}</td>
+        </tr>`;
+
+        el.innerHTML = `<div style="margin-top:12px;padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+            <div style="font-size:0.74rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+                <i class='bx bx-receipt' style="margin-right:4px;vertical-align:middle;"></i>Fee Reference (${dispCur})
+            </div>
+            <table style="${tbl}"><thead><tr>
+                <th style="${thS}text-align:left;">Registration Type</th>
+                <th style="${thS}text-align:right;">${dispCur}</th>
+            </tr></thead><tbody>${rows}</tbody></table>
+        </div>`;
+    }
+}
+
+function _previewApcJournals(hasRgn, dispCur, toDisp) {
+    const el = document.getElementById('apc-journal-preview');
+    if (!el) return;
+
+    if (!appSettings.apc_collection_active) { el.innerHTML = ''; return; }
+
+    const journals = appSettings.journals || [];
+    if (!journals.length) { el.innerHTML = ''; return; }
+
+    let rows = '';
+    journals.forEach(j => {
+        const fee    = hasRgn ? toDisp(j.fee, 'USD') : j.fee;
+        const curLbl = hasRgn ? dispCur : 'USD';
+        rows += `<tr style="border-top:1px solid rgba(74,158,255,0.12);">
+            <td style="padding:6px 8px 6px 0;color:var(--text-light);">${j.name}</td>
+            <td style="text-align:right;padding:6px 0;color:#4a9eff;font-weight:500;">${curLbl} ${fee?.toLocaleString('en-US')}</td>
+        </tr>`;
+    });
+
+    el.innerHTML = `<div style="margin-bottom:20px;padding:14px 18px;background:rgba(74,158,255,0.05);border:1px solid rgba(74,158,255,0.2);border-radius:8px;">
+        <div style="font-size:0.78rem;font-weight:600;color:#4a9eff;margin-bottom:10px;">
+            <i class='bx bx-book-open' style="margin-right:5px;"></i>APC Journal Options &amp; Fees${hasRgn ? ' (' + dispCur + ')' : ' (USD)'}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;"><thead><tr>
+            <th style="text-align:left;font-size:0.74rem;font-weight:500;color:var(--text-muted);padding:3px 8px 3px 0;">Journal</th>
+            <th style="text-align:right;font-size:0.74rem;font-weight:500;color:var(--text-muted);padding:3px 0;">Fee per Paper</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+        <div style="font-size:0.73rem;color:var(--text-muted);margin-top:8px;">APC fee is charged per paper. Select your journal in each paper block below.</div>
+    </div>`;
+}
+
+function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
+    const el = document.getElementById('preconf-cost-preview');
+    if (!el) return;
+
+    const sessions = appSettings.pre_conference_sessions || [];
+    if (!sessions.length) { el.innerHTML = ''; return; }
+
+    let rows = '';
+    sessions.forEach(sess => {
+        let feeStr;
+        if (hasRgn) {
+            const rawFee    = isLocal ? sess.fee_local : (isSAARC ? sess.fee_saarc : sess.fee_nonsaarc);
+            const nativeCur = isLocal ? 'LKR' : 'USD';
+            let dispFee = rawFee;
+            if (nativeCur !== dispCur) {
+                dispFee = dispCur === 'LKR' ? Math.round(rawFee * fxRate) : Math.round(rawFee / fxRate);
+            }
+            feeStr = `${dispCur} ${dispFee.toLocaleString('en-US')}`;
+        } else {
+            feeStr = `LKR ${sess.fee_local.toLocaleString('en-US')} / USD ${sess.fee_saarc}`;
+        }
+        rows += `<tr style="border-top:1px solid rgba(197,215,58,0.12);">
+            <td style="padding:6px 8px 6px 0;color:var(--text-light);">${sess.name}</td>
+            <td style="text-align:right;padding:6px 0;color:var(--accent);font-weight:500;white-space:nowrap;">${feeStr}</td>
+        </tr>`;
+    });
+
+    const note = !hasRgn
+        ? `<tr><td colspan="2" style="padding:5px 0 0;font-size:0.73rem;color:var(--text-muted);">Shown as Local (LKR) / SAARC &amp; Non-SAARC (USD). Select your region above for a single price.</td></tr>`
+        : '';
+
+    el.innerHTML = `<div style="margin-bottom:16px;padding:12px 16px;background:rgba(197,215,58,0.04);border:1px solid rgba(197,215,58,0.18);border-radius:8px;">
+        <div style="font-size:0.74rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+            <i class='bx bx-tag-alt' style="margin-right:4px;vertical-align:middle;"></i>Session Fees${hasRgn ? ' (' + dispCur + ')' : ''}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+            <tbody>${rows}${note}</tbody>
+        </table>
+    </div>`;
+}
+
 function calculateTotalFee() {
+    updateCostPreviews();
+
     const isMain      = document.getElementById('toggleMain').checked;
     const isAward     = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
@@ -1562,6 +1756,7 @@ function saveSettings(e) {
     populateJournalsDropdown();
     // Regenerate paper blocks so Paper ID visibility reflects the current APC collection state
     generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
+    updateCostPreviews();
     showToast('Pricing Settings saved successfully!', 'success');
 }
 
