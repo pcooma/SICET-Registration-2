@@ -28,9 +28,10 @@ const defaultSettings = {
         { id: 'pcs4', name: 'Research Methodology & Academic Writing', fee_local: 2500, fee_saarc: 25, fee_nonsaarc: 35 }
     ],
     categories: [
-        { id: 'author',    label: 'Author',     fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false, paper_discount: false },
-        { id: 'nonauthor', label: 'Non-Author', fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true,  paper_discount: false },
-        { id: 'student',   label: 'Student',    fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150, is_student: true,  no_papers: false, paper_discount: true  }
+        { id: 'author',           label: 'Author',             fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false, paper_discount: false, is_workshop_only: false },
+        { id: 'nonauthor',        label: 'Non-Author',         fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: false },
+        { id: 'student',          label: 'Student',            fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150, is_student: true,  no_papers: false, paper_discount: true,  is_workshop_only: false },
+        { id: 'workshopattendee', label: 'Workshop Attendee',  fee_local: 0,     fee_saarc: 0,   fee_nonsaarc: 0,   is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: true  }
     ],
     chair_name: 'Dr. Gayashika Fernando',
     refund_deadline: 'August 23, 2025',
@@ -430,6 +431,29 @@ function setupEventListeners() {
     });
     document.getElementById('record-detail-modal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) document.getElementById('record-detail-modal').classList.add('hidden');
+    });
+
+    // Category change — auto-enable workshops toggle for Workshop Attendee, update papers visibility
+    document.getElementById('attendeeCategory')?.addEventListener('change', () => {
+        const cat = document.getElementById('attendeeCategory').value;
+        const catDef = (appSettings.categories || []).find(c => c.label === cat);
+        if (catDef?.is_workshop_only) {
+            const preconfToggle = document.getElementById('togglePreConf');
+            if (preconfToggle && !preconfToggle.checked) {
+                preconfToggle.checked = true;
+                preconfToggle.dispatchEvent(new Event('change'));
+            }
+        }
+        // Update papers container visibility when category changes
+        const mainChecked = document.getElementById('toggleMain').checked;
+        const papersContainer = document.getElementById('dynamic-papers-container');
+        if (papersContainer && mainChecked) {
+            if (catDef?.no_papers || catDef?.is_workshop_only) {
+                papersContainer.classList.add('hidden');
+            } else {
+                papersContainer.classList.remove('hidden');
+            }
+        }
     });
 
     // Settings Actions
@@ -856,25 +880,30 @@ function calculateTotalFee() {
                 const catKey = isStudent ? 'student' : (catDef?.no_papers ? 'nonauthor' : 'author');
                 baseFee = (appSettings.conf_fees?.[regionKey]?.[catKey]) || 0;
             }
-            const hasPaperDiscount = catDef?.paper_discount || false;
-            const maxP = appSettings.discounts.discount_max_papers || 0;
-            const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
-            const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
-            const disc       = (appSettings.discounts.student_from_2nd || 0) / 100;
-
-            let confTotal;
-            if (papers === 1) {
-                confTotal = baseFee;
-                br(); breakdownText += `<span>Conference Fee:</span><span>${confTotal} ${nativeCur}</span>`;
-            } else if (hasPaperDiscount && disc > 0) {
-                const discFee = baseFee * (1 - disc);
-                confTotal = baseFee + (discFee * discPapers) + (baseFee * fullExtra);
-                br(); breakdownText += `<span>Conf (1st: ${baseFee} | ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? ` | ${fullExtra} × ${baseFee} full` : ''}):</span><span>${confTotal.toFixed(2)} ${nativeCur}</span>`;
+            if (catDef?.is_workshop_only) {
+                // Workshop Attendee: no conference base fee — cost is purely per workshop selected
+                br(); breakdownText += `<span>Conference Attendance (Workshop Attendee):</span><span>— fees via workshops</span>`;
             } else {
-                confTotal = baseFee * papers;
-                br(); breakdownText += `<span>Conf (${papers} Papers):</span><span>${confTotal} ${nativeCur}</span>`;
+                const hasPaperDiscount = catDef?.paper_discount || false;
+                const maxP = appSettings.discounts.discount_max_papers || 0;
+                const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
+                const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
+                const disc       = (appSettings.discounts.student_from_2nd || 0) / 100;
+
+                let confTotal;
+                if (papers === 1) {
+                    confTotal = baseFee;
+                    br(); breakdownText += `<span>Conference Fee:</span><span>${confTotal} ${nativeCur}</span>`;
+                } else if (hasPaperDiscount && disc > 0) {
+                    const discFee = baseFee * (1 - disc);
+                    confTotal = baseFee + (discFee * discPapers) + (baseFee * fullExtra);
+                    br(); breakdownText += `<span>Conf (1st: ${baseFee} | ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? ` | ${fullExtra} × ${baseFee} full` : ''}):</span><span>${confTotal.toFixed(2)} ${nativeCur}</span>`;
+                } else {
+                    confTotal = baseFee * papers;
+                    br(); breakdownText += `<span>Conf (${papers} Papers):</span><span>${confTotal} ${nativeCur}</span>`;
+                }
+                displayTotal += toDisplay(confTotal, nativeCur);
             }
-            displayTotal += toDisplay(confTotal, nativeCur);
         }
 
         // APC (always USD)
@@ -914,7 +943,7 @@ function calculateTotalFee() {
                 const nativeCur2 = isLocalRegion ? 'LKR' : 'USD';
                 const disp = toDisplay(rawFee, nativeCur2);
                 displayTotal += disp;
-                br(); breakdownText += `<span>Session: ${sess.name}:</span><span>${disp} ${displayCur}</span>`;
+                br(); breakdownText += `<span>Workshop: ${sess.name}:</span><span>${disp} ${displayCur}</span>`;
             }
         }
     });
@@ -970,7 +999,7 @@ function collectFormData(refId) {
     if (document.getElementById('toggleMain').checked)       typesArr.push('Main');
     if (document.getElementById('toggleAward').checked)      typesArr.push('Award');
     if (document.getElementById('toggleExcursion').checked)  typesArr.push('Excursion');
-    if (document.getElementById('togglePreConf')?.checked)   typesArr.push('Pre-Conference Sessions');
+    if (document.getElementById('togglePreConf')?.checked)   typesArr.push('Pre-Conference Workshops');
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
     return dataObj;
 }
@@ -1222,9 +1251,10 @@ function generateInvoice() {
         const nativeCur = isLocalInv ? 'LKR' : 'USD';
 
         // Resolve base fee from flexible categories
-        const catDef        = (appSettings.categories || []).find(c => c.label === category);
-        const isStudentInv  = catDef?.is_student || false;
-        const isNoPapersInv = catDef?.no_papers   || false;
+        const catDef           = (appSettings.categories || []).find(c => c.label === category);
+        const isStudentInv     = catDef?.is_student        || false;
+        const isNoPapersInv    = catDef?.no_papers          || false;
+        const isWorkshopOnlyInv = catDef?.is_workshop_only  || false;
         let baseFee = 0;
         if (catDef) {
             baseFee = isLocalInv ? catDef.fee_local : (region === 'SAARC' ? catDef.fee_saarc : catDef.fee_nonsaarc);
@@ -1234,7 +1264,9 @@ function generateInvoice() {
             baseFee = appSettings.conf_fees?.[rKey]?.[cKey] || 0;
         }
 
-        if (!isNoPapersInv && papers > 0) {
+        if (isWorkshopOnlyInv) {
+            // Workshop Attendee: no conference registration line — workshops carry all fees
+        } else if (!isNoPapersInv && papers > 0) {
             const hasPaperDiscountInv = catDef?.paper_discount || false;
             const maxP = appSettings.discounts.discount_max_papers || 0;
             const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
@@ -1292,7 +1324,7 @@ function generateInvoice() {
             const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
             if (sess) {
                 const rawFee = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
-                addItem(`Pre-Conference Session: ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
+                addItem(`Pre-Conference Workshop: ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
             }
         }
     });
@@ -1787,7 +1819,7 @@ function renderOverviewTab() {
     });
     const sessEntries = Object.entries(sessionCounts).sort((a,b) => b[1]-a[1]);
     const sessHtml = sessEntries.length === 0
-        ? '<p style="color:var(--text-muted);font-size:0.85rem;">No pre-conference session data yet.</p>'
+        ? '<p style="color:var(--text-muted);font-size:0.85rem;">No pre-conference workshop data yet.</p>'
         : `<table class="dash-breakdown-table"><tbody>` +
           sessEntries.map(([n, c]) =>
             `<tr><td class="bk-label">${escHtml(n)}</td><td class="bk-count">${c} attendees</td>
@@ -2414,12 +2446,15 @@ function renderCategoriesAdmin() {
     (appSettings.categories || []).forEach((cat, idx) => {
         const div = document.createElement('div');
         div.className = 'category-entry form-group';
+        const isWO = cat.is_workshop_only || false;
+        const feeStyle = isWO ? 'opacity:0.38;pointer-events:none;' : '';
+        const feeNote  = isWO ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;line-height:1.2;">Charged per<br>workshop</div>` : '';
         div.style.cssText = 'display:grid;grid-template-columns:1fr 100px 100px 100px auto 36px;gap:8px;align-items:end;margin-bottom:8px;';
         div.innerHTML = `
             <div class="input-field"><label>Label</label><input type="text" class="cat-label" value="${cat.label}" required></div>
-            <div class="input-field"><label>Local (LKR)</label><input type="number" class="cat-fee-local" value="${cat.fee_local}" required></div>
-            <div class="input-field"><label>SAARC (USD)</label><input type="number" class="cat-fee-saarc" value="${cat.fee_saarc}" required></div>
-            <div class="input-field"><label>Non-SAARC (USD)</label><input type="number" class="cat-fee-nonsaarc" value="${cat.fee_nonsaarc}" required></div>
+            <div class="input-field" style="${feeStyle}"><label>Local (LKR)</label><input type="number" class="cat-fee-local" value="${cat.fee_local}" ${isWO ? 'disabled tabindex="-1"' : ''}>${feeNote}</div>
+            <div class="input-field" style="${feeStyle}"><label>SAARC (USD)</label><input type="number" class="cat-fee-saarc" value="${cat.fee_saarc}" ${isWO ? 'disabled tabindex="-1"' : ''}></div>
+            <div class="input-field" style="${feeStyle}"><label>Non-SAARC (USD)</label><input type="number" class="cat-fee-nonsaarc" value="${cat.fee_nonsaarc}" ${isWO ? 'disabled tabindex="-1"' : ''}></div>
             <div style="display:flex;flex-direction:column;gap:4px;justify-content:flex-end;padding-bottom:4px;">
                 <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;cursor:pointer;white-space:nowrap;">
                     <input type="checkbox" class="cat-is-student" ${cat.is_student ? 'checked' : ''}> Student type
@@ -2429,6 +2464,9 @@ function renderCategoriesAdmin() {
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;cursor:pointer;white-space:nowrap;" title="Eligible for multi-paper submission discount">
                     <input type="checkbox" class="cat-paper-discount" ${cat.paper_discount ? 'checked' : ''}> Paper discount
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;cursor:pointer;white-space:nowrap;" title="Fee is charged per workshop, not as a flat registration fee">
+                    <input type="checkbox" class="cat-is-workshop-only" ${isWO ? 'checked' : ''}> Workshop-only
                 </label>
             </div>
             <button type="button" class="btn-remove-journal" onclick="removeCategory(${idx})" title="Remove"><i class='bx bx-trash'></i></button>
@@ -2445,33 +2483,29 @@ window.removeCategory = function(idx) {
 
 function addCategoryField() {
     if (!appSettings.categories) appSettings.categories = [];
-    appSettings.categories.push({ id: 'cat_' + Date.now(), label: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0 });
+    appSettings.categories.push({ id: 'cat_' + Date.now(), label: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0, is_student: false, no_papers: false, paper_discount: false, is_workshop_only: false });
     renderCategoriesAdmin();
 }
 
 function saveCategoriesFromAdmin() {
-    const labels        = document.querySelectorAll('#categories-list .cat-label');
-    const locals        = document.querySelectorAll('#categories-list .cat-fee-local');
-    const saarcs        = document.querySelectorAll('#categories-list .cat-fee-saarc');
-    const nsaarcs       = document.querySelectorAll('#categories-list .cat-fee-nonsaarc');
-    const isStudents    = document.querySelectorAll('#categories-list .cat-is-student');
-    const nopapers      = document.querySelectorAll('#categories-list .cat-no-papers');
-    const paperDiscounts = document.querySelectorAll('#categories-list .cat-paper-discount');
+    const rows = document.querySelectorAll('#categories-list .category-entry');
     const cats = [];
-    for (let i = 0; i < labels.length; i++) {
-        if (labels[i].value.trim()) {
-            cats.push({
-                id:             appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
-                label:          labels[i].value.trim(),
-                fee_local:      Number(locals[i].value)  || 0,
-                fee_saarc:      Number(saarcs[i].value)  || 0,
-                fee_nonsaarc:   Number(nsaarcs[i].value) || 0,
-                is_student:     isStudents[i]?.checked    || false,
-                no_papers:      nopapers[i]?.checked      || false,
-                paper_discount: paperDiscounts[i]?.checked || false
-            });
-        }
-    }
+    rows.forEach((row, i) => {
+        const label = row.querySelector('.cat-label')?.value.trim();
+        if (!label) return;
+        const isWO = row.querySelector('.cat-is-workshop-only')?.checked || false;
+        cats.push({
+            id:               appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
+            label,
+            fee_local:        isWO ? 0 : (Number(row.querySelector('.cat-fee-local')?.value)    || 0),
+            fee_saarc:        isWO ? 0 : (Number(row.querySelector('.cat-fee-saarc')?.value)    || 0),
+            fee_nonsaarc:     isWO ? 0 : (Number(row.querySelector('.cat-fee-nonsaarc')?.value) || 0),
+            is_student:       row.querySelector('.cat-is-student')?.checked    || false,
+            no_papers:        row.querySelector('.cat-no-papers')?.checked      || false,
+            paper_discount:   row.querySelector('.cat-paper-discount')?.checked || false,
+            is_workshop_only: isWO,
+        });
+    });
     appSettings.categories = cats;
     rebuildCategoryDropdown();
 }
@@ -2500,7 +2534,7 @@ function renderSessionsAdmin() {
         div.className = 'session-entry form-group';
         div.style.cssText = 'display:grid;grid-template-columns:2fr 100px 100px 100px 36px;gap:8px;align-items:end;margin-bottom:8px;';
         div.innerHTML = `
-            <div class="input-field"><label>Session Name</label><input type="text" class="sess-name" value="${sess.name}" required></div>
+            <div class="input-field"><label>Workshop Name</label><input type="text" class="sess-name" value="${sess.name}" required></div>
             <div class="input-field"><label>Local (LKR)</label><input type="number" class="sess-fee-local" value="${sess.fee_local}" required></div>
             <div class="input-field"><label>SAARC (USD)</label><input type="number" class="sess-fee-saarc" value="${sess.fee_saarc}" required></div>
             <div class="input-field"><label>Non-SAARC (USD)</label><input type="number" class="sess-fee-nonsaarc" value="${sess.fee_nonsaarc}" required></div>
@@ -2720,9 +2754,10 @@ function mergeWithDefaults(stored) {
         if (key === 'categories') {
             // Per-item flag migration: fill missing flags without losing stored fees/labels
             base.categories = (stored.categories || []).map(cat => ({
-                is_student:     false,
-                no_papers:      false,
-                paper_discount: false,
+                is_student:       false,
+                no_papers:        false,
+                paper_discount:   false,
+                is_workshop_only: false,
                 ...cat,
                 paper_discount: 'paper_discount' in cat ? cat.paper_discount : (cat.is_student || false)
             }));
