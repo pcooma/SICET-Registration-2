@@ -28,9 +28,9 @@ const defaultSettings = {
         { id: 'pcs4', name: 'Research Methodology & Academic Writing', fee_local: 2500, fee_saarc: 25, fee_nonsaarc: 35 }
     ],
     categories: [
-        { id: 'author',    label: 'Author',     fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false },
-        { id: 'nonauthor', label: 'Non-Author', fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true  },
-        { id: 'student',   label: 'Student',    fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150, is_student: true,  no_papers: false }
+        { id: 'author',    label: 'Author',     fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false, paper_discount: false },
+        { id: 'nonauthor', label: 'Non-Author', fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true,  paper_discount: false },
+        { id: 'student',   label: 'Student',    fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150, is_student: true,  no_papers: false, paper_discount: true  }
     ],
     chair_name: 'Dr. Gayashika Fernando',
     refund_deadline: 'August 23, 2025',
@@ -93,14 +93,23 @@ let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
 
 // Initialize
 function init() {
-    // Migrate stored settings: add is_student/no_papers to existing categories
+    // Migrate stored settings: add is_student/no_papers/paper_discount to existing categories
     let settingsMigrated = false;
     if (appSettings.categories) {
         appSettings.categories = appSettings.categories.map(cat => {
-            if ('is_student' in cat && 'no_papers' in cat) return cat;
-            settingsMigrated = true;
-            const ll = (cat.label || '').toLowerCase();
-            return { is_student: ll === 'student', no_papers: ll.includes('non-author') || ll === 'non author', ...cat };
+            let updated = { ...cat };
+            if (!('is_student' in cat) || !('no_papers' in cat)) {
+                settingsMigrated = true;
+                const ll = (cat.label || '').toLowerCase();
+                updated.is_student = updated.is_student ?? (ll === 'student');
+                updated.no_papers  = updated.no_papers  ?? (ll.includes('non-author') || ll === 'non author');
+            }
+            if (!('paper_discount' in cat)) {
+                // Default: same as is_student for backward compatibility
+                updated.paper_discount = updated.is_student || false;
+                settingsMigrated = true;
+            }
+            return updated;
         });
     }
     if (!appSettings.pre_conference_sessions || appSettings.pre_conference_sessions.length === 0) {
@@ -216,7 +225,7 @@ function setupEventListeners() {
         const cat = document.getElementById('attendeeCategory').value;
         const catDef = (appSettings.categories || []).find(c => c.label === cat);
 
-        if (val > 1 && catDef?.is_student) {
+        if (val > 1 && catDef?.paper_discount) {
             hint.classList.remove('hidden');
         } else {
             hint.classList.add('hidden');
@@ -283,6 +292,14 @@ function setupEventListeners() {
         } else {
             generatePaperBlocks(count || 1);
         }
+
+        // Update discount hint visibility when category changes
+        const hint = document.querySelector('.discount-hint');
+        if (hint) {
+            if (count > 1 && catDef?.paper_discount) hint.classList.remove('hidden');
+            else hint.classList.add('hidden');
+        }
+
         calculateTotalFee();
     });
 
@@ -564,8 +581,9 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
     const thS = 'font-size:0.74rem;font-weight:500;color:var(--text-muted);padding:4px 6px 4px 0;';
     const rb  = 'border-top:1px solid rgba(255,255,255,0.07);';
 
-    const catDef       = category ? cats.find(c => c.label === category) : null;
-    const isStudentType = catDef?.is_student || false;
+    const catDef        = category ? cats.find(c => c.label === category) : null;
+    const isStudentType = catDef?.is_student     || false;
+    const hasPaperDisc  = catDef?.paper_discount || false;
 
     let rows = '';
 
@@ -640,6 +658,22 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
                 rows += `<tr style="${rb}">
                     <td style="padding:5px 6px 5px 0;color:var(--text-muted);font-size:0.8rem;padding-left:10px;">↳ Inauguration opt-in (optional)</td>
                     <td style="text-align:right;padding:5px 6px;color:var(--text-muted);font-size:0.8rem;">+${dispFee?.toLocaleString('en-US')}</td>
+                </tr>`;
+            }
+        }
+
+        // Paper discount sub-row — shown when category qualifies for multi-paper discount
+        if (hasPaperDisc && category) {
+            const discPct  = appSettings.discounts.student_from_2nd || 0;
+            const maxP     = appSettings.discounts.discount_max_papers || 0;
+            const baseFeeP = isLocal ? catDef.fee_local : (isSAARC ? catDef.fee_saarc : catDef.fee_nonsaarc);
+            const nativeCurP = isLocal ? 'LKR' : 'USD';
+            if (discPct > 0) {
+                const discFeeP = Math.round(baseFeeP * (1 - discPct / 100));
+                const capNote  = maxP > 0 ? `, up to ${maxP} papers` : '';
+                rows += `<tr style="${rb}">
+                    <td style="padding:5px 6px 5px 0;color:var(--text-muted);font-size:0.8rem;padding-left:10px;">↳ 2nd paper onwards: ${toDisp(discFeeP, nativeCurP)?.toLocaleString('en-US')} (${discPct}% off${capNote})</td>
+                    <td style="text-align:right;padding:5px 6px;color:var(--text-muted);font-size:0.8rem;">per paper</td>
                 </tr>`;
             }
         }
@@ -819,6 +853,7 @@ function calculateTotalFee() {
                 const catKey = isStudent ? 'student' : (catDef?.no_papers ? 'nonauthor' : 'author');
                 baseFee = (appSettings.conf_fees?.[regionKey]?.[catKey]) || 0;
             }
+            const hasPaperDiscount = catDef?.paper_discount || false;
             const maxP = appSettings.discounts.discount_max_papers || 0;
             const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
             const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
@@ -828,7 +863,7 @@ function calculateTotalFee() {
             if (papers === 1) {
                 confTotal = baseFee;
                 br(); breakdownText += `<span>Conference Fee:</span><span>${confTotal} ${nativeCur}</span>`;
-            } else if (isStudent && disc > 0) {
+            } else if (hasPaperDiscount && disc > 0) {
                 const discFee = baseFee * (1 - disc);
                 confTotal = baseFee + (discFee * discPapers) + (baseFee * fullExtra);
                 br(); breakdownText += `<span>Conf (1st: ${baseFee} | ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? ` | ${fullExtra} × ${baseFee} full` : ''}):</span><span>${confTotal.toFixed(2)} ${nativeCur}</span>`;
@@ -1185,7 +1220,7 @@ function generateInvoice() {
         }
 
         if (!isNoPapersInv && papers > 0) {
-            const isStudent = isStudentInv;
+            const hasPaperDiscountInv = catDef?.paper_discount || false;
             const maxP = appSettings.discounts.discount_max_papers || 0;
             const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
             const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
@@ -1195,7 +1230,7 @@ function generateInvoice() {
             if (papers === 1) {
                 confTotal = baseFee;
                 confLabel = `Conference Registration — ${title} ${fullName} (${category}, ${region})`;
-            } else if (isStudent && disc > 0) {
+            } else if (hasPaperDiscountInv && disc > 0) {
                 const discFee = baseFee * (1 - disc);
                 confTotal = baseFee + (discFee * discPapers) + (baseFee * fullExtra);
                 confLabel = `Conference (${papers} papers — 1st: ${baseFee}, ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? `, ${fullExtra} × ${baseFee} full` : ''})`;
@@ -2060,6 +2095,9 @@ function renderCategoriesAdmin() {
                 <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;cursor:pointer;white-space:nowrap;">
                     <input type="checkbox" class="cat-no-papers" ${cat.no_papers ? 'checked' : ''}> No papers
                 </label>
+                <label style="display:flex;align-items:center;gap:5px;font-size:0.8rem;cursor:pointer;white-space:nowrap;" title="Eligible for multi-paper submission discount">
+                    <input type="checkbox" class="cat-paper-discount" ${cat.paper_discount ? 'checked' : ''}> Paper discount
+                </label>
             </div>
             <button type="button" class="btn-remove-journal" onclick="removeCategory(${idx})" title="Remove"><i class='bx bx-trash'></i></button>
         `;
@@ -2080,23 +2118,25 @@ function addCategoryField() {
 }
 
 function saveCategoriesFromAdmin() {
-    const labels     = document.querySelectorAll('#categories-list .cat-label');
-    const locals     = document.querySelectorAll('#categories-list .cat-fee-local');
-    const saarcs     = document.querySelectorAll('#categories-list .cat-fee-saarc');
-    const nsaarcs    = document.querySelectorAll('#categories-list .cat-fee-nonsaarc');
-    const isStudents = document.querySelectorAll('#categories-list .cat-is-student');
-    const nopapers   = document.querySelectorAll('#categories-list .cat-no-papers');
+    const labels        = document.querySelectorAll('#categories-list .cat-label');
+    const locals        = document.querySelectorAll('#categories-list .cat-fee-local');
+    const saarcs        = document.querySelectorAll('#categories-list .cat-fee-saarc');
+    const nsaarcs       = document.querySelectorAll('#categories-list .cat-fee-nonsaarc');
+    const isStudents    = document.querySelectorAll('#categories-list .cat-is-student');
+    const nopapers      = document.querySelectorAll('#categories-list .cat-no-papers');
+    const paperDiscounts = document.querySelectorAll('#categories-list .cat-paper-discount');
     const cats = [];
     for (let i = 0; i < labels.length; i++) {
         if (labels[i].value.trim()) {
             cats.push({
-                id:           appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
-                label:        labels[i].value.trim(),
-                fee_local:    Number(locals[i].value)  || 0,
-                fee_saarc:    Number(saarcs[i].value)  || 0,
-                fee_nonsaarc: Number(nsaarcs[i].value) || 0,
-                is_student:   isStudents[i]?.checked || false,
-                no_papers:    nopapers[i]?.checked   || false
+                id:             appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
+                label:          labels[i].value.trim(),
+                fee_local:      Number(locals[i].value)  || 0,
+                fee_saarc:      Number(saarcs[i].value)  || 0,
+                fee_nonsaarc:   Number(nsaarcs[i].value) || 0,
+                is_student:     isStudents[i]?.checked    || false,
+                no_papers:      nopapers[i]?.checked      || false,
+                paper_discount: paperDiscounts[i]?.checked || false
             });
         }
     }
