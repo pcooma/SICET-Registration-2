@@ -88,50 +88,13 @@ const priceTriggers = document.querySelectorAll('.price-trigger');
 let submissions = []; // Loaded from Google Drive on demand (see loadFromGoogleDrive)
 let adminLoggedIn = false;
 let pendingAdminView = 'settings';
-let appSettings = JSON.parse(localStorage.getItem('sicet2026_settings')) || defaultSettings;
+let appSettings = JSON.parse(JSON.stringify(defaultSettings)); // resolved properly in resolveSettings()
 let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
 
 // Initialize
-function init() {
-    // Migrate stored settings: add is_student/no_papers/paper_discount to existing categories
-    let settingsMigrated = false;
-    if (appSettings.categories) {
-        appSettings.categories = appSettings.categories.map(cat => {
-            let updated = { ...cat };
-            if (!('is_student' in cat) || !('no_papers' in cat)) {
-                settingsMigrated = true;
-                const ll = (cat.label || '').toLowerCase();
-                updated.is_student = updated.is_student ?? (ll === 'student');
-                updated.no_papers  = updated.no_papers  ?? (ll.includes('non-author') || ll === 'non author');
-            }
-            if (!('paper_discount' in cat)) {
-                // Default: same as is_student for backward compatibility
-                updated.paper_discount = updated.is_student || false;
-                settingsMigrated = true;
-            }
-            return updated;
-        });
-    }
-    if (!appSettings.pre_conference_sessions || appSettings.pre_conference_sessions.length === 0) {
-        appSettings.pre_conference_sessions = defaultSettings.pre_conference_sessions;
-        settingsMigrated = true;
-    }
-    // Migrate inauguration_fee_usd (new field — old data won't have it)
-    if (!('inauguration_fee_usd' in appSettings)) {
-        appSettings.inauguration_fee_usd = defaultSettings.inauguration_fee_usd;
-        // Also set LKR default if it was still at the old 0 placeholder
-        if (appSettings.inauguration_fee === 0) appSettings.inauguration_fee = defaultSettings.inauguration_fee;
-        settingsMigrated = true;
-    }
-    if (!('apc_collection_active' in appSettings)) {
-        appSettings.apc_collection_active = defaultSettings.apc_collection_active;
-        settingsMigrated = true;
-    }
-    if (!appSettings.award_categories)          { appSettings.award_categories          = defaultSettings.award_categories;          settingsMigrated = true; }
-    if (!appSettings.award_purposes)            { appSettings.award_purposes            = defaultSettings.award_purposes;            settingsMigrated = true; }
-    if (!appSettings.excursion_mobility_options){ appSettings.excursion_mobility_options = defaultSettings.excursion_mobility_options; settingsMigrated = true; }
-    if (!appSettings.excursion_activity_options){ appSettings.excursion_activity_options = defaultSettings.excursion_activity_options; settingsMigrated = true; }
-    if (settingsMigrated) localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+async function init() {
+    // Resolve settings from Drive (single source of truth) before rendering anything
+    await resolveSettings();
 
     updateAdminDashboard();
     populateSettingsForm();
@@ -2367,8 +2330,104 @@ function saveExcursionOptionsFromAdmin() {
 }
 
 // ---------------------------------------------------------------------------
-// Drive settings sync
+// Settings resolution — Google Drive is the single source of truth
 // ---------------------------------------------------------------------------
+
+/**
+ * Merge stored settings onto a fresh copy of defaultSettings.
+ * - defaultSettings provides the complete schema; any new field added to
+ *   defaultSettings will automatically appear in the merged output even if
+ *   the stored version pre-dates it.
+ * - Stored values win for every key that exists in both (Drive/localStorage
+ *   values are never silently discarded).
+ * - Arrays are taken whole from the stored version (we don't try to merge
+ *   array contents), except for categories[] where per-item flags are
+ *   filled-in individually for backward compatibility.
+ * - Plain nested objects (discounts, conf_fees, excursion_fees …) are
+ *   merged one level deep so new sub-keys get their default value.
+ */
+function mergeWithDefaults(stored) {
+    const base = JSON.parse(JSON.stringify(defaultSettings)); // fresh schema
+    if (!stored || typeof stored !== 'object') return base;
+
+    for (const key of Object.keys(stored)) {
+        if (key === 'categories') {
+            // Per-item flag migration: fill missing flags without losing stored fees/labels
+            base.categories = (stored.categories || []).map(cat => ({
+                is_student:     false,
+                no_papers:      false,
+                paper_discount: false,
+                ...cat,
+                paper_discount: 'paper_discount' in cat ? cat.paper_discount : (cat.is_student || false)
+            }));
+        } else if (
+            typeof base[key] === 'object' && base[key] !== null && !Array.isArray(base[key]) &&
+            typeof stored[key] === 'object' && stored[key] !== null && !Array.isArray(stored[key])
+        ) {
+            // Nested plain object — shallow merge so new sub-keys get defaults
+            base[key] = { ...base[key], ...stored[key] };
+        } else {
+            base[key] = stored[key];
+        }
+    }
+    return base;
+}
+
+/**
+ * Resolve the authoritative settings before the UI renders.
+ * Priority: Google Drive → localStorage fallback (network failure only).
+ * On first run (no Drive file yet) pushes defaultSettings to Drive.
+ * If the Drive file is outdated (missing new fields) the merged version
+ * is pushed back automatically so Drive stays up to date.
+ */
+async function resolveSettings() {
+    const overlay = document.getElementById('settings-loading-overlay');
+
+    if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+        try {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 8000);
+            const resp = await fetch(APPS_SCRIPT_URL + '?action=getSettings', {
+                cache: 'no-store',
+                signal: controller.signal
+            });
+            clearTimeout(tid);
+
+            if (resp.ok) {
+                const json = await resp.json();
+
+                if (json.success && json.settings) {
+                    // Merge Drive settings with current defaultSettings schema
+                    const merged    = mergeWithDefaults(json.settings);
+                    const mergedStr = JSON.stringify(merged);
+                    appSettings = merged;
+                    localStorage.setItem('sicet2026_settings', mergedStr);
+                    // If merge upgraded the schema, push the enriched version back to Drive
+                    if (mergedStr !== JSON.stringify(json.settings)) {
+                        pushSettingsToDrive();
+                    }
+                } else {
+                    // No settings file in Drive yet (first run) — bootstrap from defaults
+                    appSettings = mergeWithDefaults({});
+                    localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+                    pushSettingsToDrive(); // create the file for all future visitors
+                }
+
+                if (overlay) overlay.style.display = 'none';
+                return;
+            }
+        } catch (err) {
+            console.warn('Drive settings fetch failed — falling back to localStorage:', err);
+            showToast('Could not reach Google Drive — using locally cached settings. Fees may differ if settings were recently changed.', 'error');
+        }
+    }
+
+    // Network failure / Drive not configured: fall back to localStorage
+    const stored = JSON.parse(localStorage.getItem('sicet2026_settings') || 'null');
+    appSettings = mergeWithDefaults(stored || {});
+    localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+    if (overlay) overlay.style.display = 'none';
+}
 
 // Push current appSettings to Google Drive (fire-and-forget via no-cors POST)
 async function pushSettingsToDrive() {
@@ -2384,35 +2443,5 @@ async function pushSettingsToDrive() {
     }
 }
 
-// Load settings from Drive on startup; overrides localStorage if Drive has a copy.
-// Runs async after init() so the UI is never blocked.
-async function loadSettingsFromDrive() {
-    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
-    try {
-        const resp = await fetch(APPS_SCRIPT_URL + '?action=getSettings', { cache: 'no-store' });
-        if (!resp.ok) return;
-        const json = await resp.json();
-        if (!json.success || !json.settings) return;
-
-        appSettings = json.settings;
-        localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
-
-        // Re-render everything that depends on settings
-        populateSettingsForm();
-        populateJournalsDropdown();
-        rebuildCategoryDropdown();
-        rebuildSessionCheckboxes();
-        rebuildAwardCategoryDropdown();
-        rebuildAwardPurposeDropdown();
-        rebuildExcursionMobilityDropdown();
-        rebuildExcursionActivityDropdown();
-        generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
-        updateCostPreviews();
-    } catch (err) {
-        console.warn('Could not load settings from Drive:', err);
-    }
-}
-
 // Run init
 init();
-loadSettingsFromDrive();
