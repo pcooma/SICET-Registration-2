@@ -2192,10 +2192,7 @@ function saveSettings(e) {
     // Persist locally
     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
 
-    // Persist to Google Drive (async, non-blocking)
-    pushSettingsToDrive();
-
-    // Re-populate globals
+    // Re-populate globals immediately
     populateJournalsDropdown();
     rebuildAwardCategoryDropdown();
     rebuildAwardPurposeDropdown();
@@ -2204,7 +2201,16 @@ function saveSettings(e) {
     // Regenerate paper blocks so Paper ID visibility reflects the current APC collection state
     generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
     updateCostPreviews();
-    showToast('Settings saved — syncing to Google Drive…', 'success');
+    showToast('Saving to Google Drive…', 'success');
+
+    // Persist to Google Drive and confirm
+    pushSettingsToDrive().then(ok => {
+        if (ok) {
+            showToast('Settings saved and synced to Google Drive.', 'success');
+        } else {
+            showToast('Settings saved locally but Drive sync failed — other users may not see your changes.', 'error');
+        }
+    });
 }
 
 function populateJournalsDropdown() {
@@ -2762,15 +2768,21 @@ async function resolveSettings() {
                     const mergedStr = JSON.stringify(merged);
                     appSettings = merged;
                     localStorage.setItem('sicet2026_settings', mergedStr);
-                    // If merge upgraded the schema, push the enriched version back to Drive
-                    if (mergedStr !== JSON.stringify(json.settings)) {
+                    // Only push back if Drive is genuinely missing new schema keys (not just key-order diffs)
+                    const hasNewKeys = Object.keys(merged).some(k => !(k in json.settings));
+                    if (hasNewKeys) {
                         pushSettingsToDrive();
                     }
-                } else {
-                    // No settings file in Drive yet (first run) — bootstrap from defaults
+                } else if (json.error === 'No settings file found') {
+                    // Genuine first run — bootstrap from defaults and create the file
                     appSettings = mergeWithDefaults({});
                     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
-                    pushSettingsToDrive(); // create the file for all future visitors
+                    pushSettingsToDrive();
+                } else {
+                    // GAS returned an error — use defaults locally but don't overwrite Drive
+                    appSettings = mergeWithDefaults({});
+                    localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+                    console.warn('Drive settings error:', json.error);
                 }
 
                 if (overlay) overlay.style.display = 'none';
@@ -2789,17 +2801,21 @@ async function resolveSettings() {
     if (overlay) overlay.style.display = 'none';
 }
 
-// Push current appSettings to Google Drive (fire-and-forget via no-cors POST)
+// Push current appSettings to Google Drive — returns true on confirmed success
 async function pushSettingsToDrive() {
-    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return false;
     try {
-        await fetch(APPS_SCRIPT_URL, {
+        const resp = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ action: 'saveSettings', adminKey: ADMIN_KEY, settings: appSettings })
         });
+        if (!resp.ok) return false;
+        const json = await resp.json();
+        return json.success === true;
     } catch (err) {
         console.warn('Could not push settings to Drive:', err);
+        return false;
     }
 }
 
