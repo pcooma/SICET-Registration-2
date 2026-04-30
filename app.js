@@ -391,6 +391,19 @@ function setupEventListeners() {
     registrationForm.addEventListener('input', debounce(saveDraft, 500));
     registrationForm.addEventListener('change', debounce(saveDraft, 500));
 
+    // Restore stored refId when email is typed, so returning users reuse their record
+    document.getElementById('email')?.addEventListener('blur', () => {
+        const email = document.getElementById('email').value.trim();
+        if (!email) return;
+        const stored = JSON.parse(localStorage.getItem('sicet2026_ref') || 'null');
+        if (stored && stored.email === email && stored.refId) {
+            const refEl = document.getElementById('reg-ref-id');
+            if (refEl && (!refEl.textContent || refEl.textContent === '—')) {
+                showRefId(stored.refId);
+            }
+        }
+    });
+
     // Admin Actions
     btnClear.addEventListener('click', loadFromGoogleDrive);
     btnExport.addEventListener('click', exportToExcel);
@@ -1121,6 +1134,10 @@ async function handleFormSubmit(e) {
     submitBtn.innerHTML = '<span>Submit Registration</span><i class="bx bx-right-arrow-alt"></i>';
     if (!ok) return;
 
+    // Keep email→refId in localStorage so any re-submission from this browser updates the same record
+    const submittedEmail = dataObj.Email || '';
+    if (submittedEmail) localStorage.setItem('sicet2026_ref', JSON.stringify({ email: submittedEmail, refId }));
+
     clearDraft();
     registrationForm.reset();
     document.querySelectorAll('.section-toggle').forEach(t => t.dispatchEvent(new Event('change')));
@@ -1165,11 +1182,19 @@ function generateInvoice() {
 
     const dateObj = new Date();
     const dateStr = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    // Reuse existing ref ID (if already generated) so we never create duplicate Drive folders
+
+    // Reuse existing ref ID — priority: element already shows one → localStorage for this email → generate new
     let refId = document.getElementById('reg-ref-id')?.textContent?.trim();
     if (!refId || refId === '—') {
-        refId = 'SICET2026-' + Date.now().toString().slice(-7);
+        const storedRef = JSON.parse(localStorage.getItem('sicet2026_ref') || 'null');
+        if (storedRef && storedRef.email === email && storedRef.refId) {
+            refId = storedRef.refId;
+        } else {
+            refId = 'SICET2026-' + Date.now().toString().slice(-7);
+        }
     }
+    // Always persist the email→refId mapping so re-visits reuse the same record
+    if (email) localStorage.setItem('sicet2026_ref', JSON.stringify({ email, refId }));
     showRefId(refId);
     const invoiceNum = refId;
 
@@ -1867,6 +1892,11 @@ function renderRecordsTable(rows) {
         return;
     }
 
+    // Build a set of emails that appear more than once across ALL submissions (not just filtered rows)
+    const emailCount = {};
+    submissions.forEach(s => { if (s.Email) emailCount[s.Email.toLowerCase()] = (emailCount[s.Email.toLowerCase()] || 0) + 1; });
+    const dupEmails = new Set(Object.keys(emailCount).filter(e => emailCount[e] > 1));
+
     const sorted = [...rows].reverse();
     sorted.forEach((sub, i) => {
         const tr = document.createElement('tr');
@@ -1874,12 +1904,16 @@ function renderRecordsTable(rows) {
         const papers = parseInt(sub.Number_of_Papers) || 0;
         const fee    = parseFloat(sub.Calculated_Total_Fee) || 0;
         const dateStr = sub.Submission_Date ? String(sub.Submission_Date).split(',')[0].split('T')[0] : '—';
+        const isDup  = sub.Email && dupEmails.has(sub.Email.toLowerCase());
+        if (isDup) tr.style.background = 'rgba(255,77,77,0.04)';
+
+        const dupBadge = isDup ? `<span title="Duplicate email detected" style="margin-left:5px;font-size:0.7rem;background:rgba(255,77,77,0.15);color:#ff6b6b;border:1px solid rgba(255,77,77,0.3);border-radius:4px;padding:1px 5px;">DUP</span>` : '';
         tr.innerHTML = `
             <td style="color:var(--text-muted);font-size:0.8rem;">${sorted.length - i}</td>
             <td style="white-space:nowrap;font-size:0.82rem;">${escHtml(dateStr)}</td>
             <td style="font-size:0.78rem;color:var(--accent);font-family:monospace;">${escHtml(sub.Invoice_ID || '—')}</td>
             <td><strong>${escHtml((sub.Title ? sub.Title + ' ' : '') + (sub.Full_Name || ''))}</strong><br><small style="color:var(--text-muted);">${escHtml(sub.Organization || '')}</small></td>
-            <td style="font-size:0.82rem;">${escHtml(sub.Email || '—')}</td>
+            <td style="font-size:0.82rem;">${escHtml(sub.Email || '—')}${dupBadge}</td>
             <td><span class="badge ${getCatBadge(sub.Attendee_Category)}">${escHtml(sub.Attendee_Category || 'N/A')}</span></td>
             <td style="font-size:0.82rem;">${escHtml(sub.Attendee_Region || '—')}</td>
             <td style="font-size:0.82rem;">${escHtml(sub.Country || '—')}</td>

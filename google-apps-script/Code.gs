@@ -110,9 +110,10 @@ function doGet(e) {
 function handleSubmitRegistration(data) {
   const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
 
-  // Server-side unique ID if not supplied
+  // Server-side deduplication: if no Invoice_ID supplied, check sheet for existing row with same email
   if (!data.Invoice_ID) {
-    data.Invoice_ID = generateInvoiceId();
+    const existingId = findInvoiceIdByEmail(data.Email, mainFolder);
+    data.Invoice_ID = existingId || generateInvoiceId();
   }
 
   const nameParts = (data.Full_Name || 'Unknown').trim().split(/\s+/);
@@ -347,6 +348,27 @@ function getRegistrationByRef(refId) {
     }
   }
   throw new Error('No registration found for Reference ID: ' + refId);
+}
+
+function findInvoiceIdByEmail(email, mainFolder) {
+  if (!email) return null;
+  const files = mainFolder.getFilesByName(MASTER_SHEET_NAME);
+  if (!files.hasNext()) return null;
+  const sheet = SpreadsheetApp.openById(files.next().getId()).getActiveSheet();
+  const values = sheet.getDataRange().getValues();
+  if (values.length <= 1) return null;
+  const headers = values[0];
+  const emailCol = headers.indexOf('Email');
+  const idCol    = headers.indexOf('Invoice_ID');
+  if (emailCol < 0 || idCol < 0) return null;
+  // Search from the bottom so we return the most recent match
+  for (let r = values.length - 1; r >= 1; r--) {
+    if (String(values[r][emailCol]).trim().toLowerCase() === String(email).trim().toLowerCase()
+        && values[r][idCol]) {
+      return values[r][idCol];
+    }
+  }
+  return null;
 }
 
 function generateInvoiceId() {
