@@ -793,7 +793,7 @@ function calculateTotalFee() {
 
     let displayTotal = 0;
     let breakdownText = '';
-    const br = () => { if (breakdownText) breakdownText += ' <br> '; };
+    const br = () => {}; // grid layout handles row placement; no <br> needed
 
     // 1. Main Conference & APC
     if (isMain) {
