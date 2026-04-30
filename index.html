@@ -157,7 +157,7 @@
                         <p style="margin:0 0 10px;color:var(--text-muted);font-size:0.9rem;"><i class='bx bx-calendar-event' style="color:var(--accent);margin-right:6px;"></i>Student registrations do not include the Inauguration Ceremony by default. You may opt in for an additional fee.</p>
                         <div class="form-checkbox">
                             <input type="checkbox" id="includeInauguration" name="Include_Inauguration" class="price-trigger">
-                            <label for="includeInauguration">I would like to attend the Inauguration Ceremony</label>
+                            <label for="includeInauguration">I would like to attend the Inauguration Ceremony <span id="inauguration-fee-label" style="color:var(--accent);font-size:0.88em;"></span></label>
                         </div>
                     </div>
 
@@ -290,20 +290,18 @@
                                 <label for="awardCategory">Category Applied For</label>
                                 <select id="awardCategory" name="Award_Category">
                                     <option value="" disabled selected>Select Category</option>
-                                    <option value="Innovation">Innovation</option>
-                                    <option value="Sustainability">Sustainability</option>
-                                    <option value="Leadership">Leadership</option>
                                 </select>
                             </div>
                             <div class="input-field col">
                                 <label for="primaryReason">Primary Purpose of Attendance</label>
                                 <select id="primaryReason" name="Primary_Reason">
                                     <option value="" disabled selected>Select Purpose</option>
-                                    <option value="Networking">Networking</option>
-                                    <option value="To Receive Award">To Receive Award</option>
-                                    <option value="Other">Other</option>
                                 </select>
                             </div>
+                        </div>
+                        <div id="primary-reason-other-group" class="form-group hidden" style="margin-top:6px;margin-bottom:0;">
+                            <label for="primaryReasonOther">Please specify your purpose</label>
+                            <input type="text" id="primaryReasonOther" name="Primary_Reason_Other" placeholder="Describe your primary purpose of attendance">
                         </div>
                     </div>
 
@@ -330,17 +328,11 @@
                             <div class="input-field col">
                                 <label for="excrMobility">Any strict mobility requirements?</label>
                                 <select id="excrMobility" name="Excursion_Mobility">
-                                    <option value="None" selected>None</option>
-                                    <option value="Wheelchair Access">Wheelchair Access Needed</option>
-                                    <option value="Limited Walking">Limited Walking preferred</option>
                                 </select>
                             </div>
                             <div class="input-field col">
                                 <label for="excrShopping">Preferred Activity</label>
                                 <select id="excrShopping" name="Excursion_Activity">
-                                    <option value="Sightseeing" selected>Sightseeing mostly</option>
-                                    <option value="Shopping">Shopping & Local Crafts</option>
-                                    <option value="Historical Sites">Historical Sites</option>
                                 </select>
                             </div>
                         </div>
@@ -422,11 +414,6 @@
                                 </div>
                             </div>
 
-                            <!-- Invoice Download Button -->
-                            <button type="button" class="btn" id="btn-download-invoice"
-                                style="width:100%; padding:12px; font-size:1rem; justify-content:center; background:linear-gradient(135deg,rgba(42,107,42,0.25),rgba(197,215,58,0.12)); border:1px solid rgba(197,215,58,0.4); color:var(--accent);">
-                                <i class='bx bxs-file-pdf'></i> Download Proforma Invoice
-                            </button>
                         </div>
                     </div>
 
@@ -473,6 +460,14 @@
                             <label for="additionalInfo">Additional Notes or Special Requirements</label>
                             <textarea id="additionalInfo" name="Additional_Info" rows="2"
                                 placeholder="Any special requirements, accessibility needs, or additional information..."></textarea>
+                        </div>
+
+                        <!-- Invoice Download Button — placed here so user reads all instructions before downloading -->
+                        <div id="invoice-download-wrapper" class="hidden" style="margin-top:6px;">
+                            <button type="button" class="btn" id="btn-download-invoice"
+                                style="width:100%; padding:14px; font-size:1rem; justify-content:center; background:linear-gradient(135deg,rgba(42,107,42,0.25),rgba(197,215,58,0.12)); border:1px solid rgba(197,215,58,0.4); color:var(--accent);">
+                                <i class='bx bxs-file-pdf'></i> Download Proforma Invoice &amp; Get Reference ID
+                            </button>
                         </div>
 
                     </div>
@@ -686,6 +681,47 @@
                         </button>
                     </div>
 
+                    <!-- Excellence Award Options -->
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bx-award'></i> Excellence Award Options</h3>
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:16px;">Manage dropdown options shown to registrants in the Excellence Award section.</p>
+                        <div class="settings-group">
+                            <h4>Award Categories <small style="color:var(--text-muted);font-weight:400;">(for "Category Applied For")</small></h4>
+                            <div id="award-categories-list" style="margin-bottom:6px;"></div>
+                            <button type="button" class="btn btn-sm btn-primary mt-2" onclick="addSimpleListItem('award-categories-list','award-category-item')">
+                                <i class='bx bx-plus'></i> Add Category
+                            </button>
+                        </div>
+                        <div class="settings-group" style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
+                            <h4>Primary Purpose Options <small style="color:var(--text-muted);font-weight:400;">(for "Primary Purpose of Attendance")</small></h4>
+                            <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:8px;">If "Other" is included, a free-text field will appear automatically when the registrant selects it.</p>
+                            <div id="award-purposes-list" style="margin-bottom:6px;"></div>
+                            <button type="button" class="btn btn-sm btn-primary mt-2" onclick="addSimpleListItem('award-purposes-list','award-purpose-item')">
+                                <i class='bx bx-plus'></i> Add Purpose
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Excursion Preferences -->
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bx-trip'></i> Excursion Preferences</h3>
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:16px;">Manage dropdown options shown to registrants in the Excursion Details section.</p>
+                        <div class="settings-group">
+                            <h4>Mobility Requirements Options <small style="color:var(--text-muted);font-weight:400;">(for "Any strict mobility requirements?")</small></h4>
+                            <div id="excursion-mobility-list" style="margin-bottom:6px;"></div>
+                            <button type="button" class="btn btn-sm btn-primary mt-2" onclick="addSimpleListItem('excursion-mobility-list','mobility-item')">
+                                <i class='bx bx-plus'></i> Add Option
+                            </button>
+                        </div>
+                        <div class="settings-group" style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
+                            <h4>Preferred Activity Options <small style="color:var(--text-muted);font-weight:400;">(for "Preferred Activity")</small></h4>
+                            <div id="excursion-activity-list" style="margin-bottom:6px;"></div>
+                            <button type="button" class="btn btn-sm btn-primary mt-2" onclick="addSimpleListItem('excursion-activity-list','activity-item')">
+                                <i class='bx bx-plus'></i> Add Option
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Invoice Settings -->
                     <div class="settings-card full-width">
                         <h3><i class='bx bxs-file-pdf'></i> Invoice Settings</h3>
@@ -737,7 +773,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=34"></script>
+    <script src="app.js?v=35"></script>
 </body>
 
 </html>

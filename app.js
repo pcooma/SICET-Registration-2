@@ -35,7 +35,11 @@ const defaultSettings = {
     chair_name: 'Dr. Gayashika Fernando',
     refund_deadline: 'August 23, 2025',
     usd_to_lkr: 320,
-    apc_collection_active: false
+    apc_collection_active: false,
+    award_categories: ['Innovation', 'Sustainability', 'Leadership'],
+    award_purposes: ['Networking', 'To Receive Award', 'Other'],
+    excursion_mobility_options: ['None', 'Wheelchair Access Needed', 'Limited Walking preferred'],
+    excursion_activity_options: ['Sightseeing mostly', 'Shopping & Local Crafts', 'Historical Sites']
 };
 
 // ---- GOOGLE DRIVE CONFIGURATION ----
@@ -114,6 +118,10 @@ function init() {
         appSettings.apc_collection_active = defaultSettings.apc_collection_active;
         settingsMigrated = true;
     }
+    if (!appSettings.award_categories)          { appSettings.award_categories          = defaultSettings.award_categories;          settingsMigrated = true; }
+    if (!appSettings.award_purposes)            { appSettings.award_purposes            = defaultSettings.award_purposes;            settingsMigrated = true; }
+    if (!appSettings.excursion_mobility_options){ appSettings.excursion_mobility_options = defaultSettings.excursion_mobility_options; settingsMigrated = true; }
+    if (!appSettings.excursion_activity_options){ appSettings.excursion_activity_options = defaultSettings.excursion_activity_options; settingsMigrated = true; }
     if (settingsMigrated) localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
 
     updateAdminDashboard();
@@ -121,6 +129,10 @@ function init() {
     populateJournalsDropdown();
     rebuildCategoryDropdown();
     rebuildSessionCheckboxes();
+    rebuildAwardCategoryDropdown();
+    rebuildAwardPurposeDropdown();
+    rebuildExcursionMobilityDropdown();
+    rebuildExcursionActivityDropdown();
     generatePaperBlocks(1);
     setupEventListeners();
     updateSubmitButtonState();
@@ -276,6 +288,15 @@ function setupEventListeners() {
 
     // Excursion ticket visibility based on attendee region
     document.getElementById('attendeeRegion').addEventListener('change', updateExcursionTicketVisibility);
+
+    // "Other" purpose text field visibility
+    document.getElementById('primaryReason')?.addEventListener('change', (e) => {
+        const otherGroup = document.getElementById('primary-reason-other-group');
+        if (otherGroup) {
+            if (e.target.value === 'Other') otherGroup.classList.remove('hidden');
+            else otherGroup.classList.add('hidden');
+        }
+    });
 
     // File size validation
     document.getElementById('studentId').addEventListener('change', (e) => {
@@ -525,24 +546,31 @@ function updateCostPreviews() {
     _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, toDisp);
     _previewApcJournals(hasRgn, dispCur, toDisp);
     _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur);
+    updateInaugurationLabel(isLocal, hasRgn);
 }
 
 function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, toDisp) {
     const el = document.getElementById('reg-type-cost-preview');
     if (!el) return;
 
-    const cats    = appSettings.categories || [];
-    const awdFee  = appSettings.award_fee || 0;                      // LKR native
-    const exclLoc = appSettings.excursion_fees?.local    || 0;       // LKR native
-    const exclFor = appSettings.excursion_fees?.foreigner || 0;      // LKR native
+    const cats        = appSettings.categories || [];
+    const awdFee      = appSettings.award_fee || 0;                   // LKR native
+    const exclLoc     = appSettings.excursion_fees?.local    || 0;    // LKR native
+    const exclFor     = appSettings.excursion_fees?.foreigner || 0;   // LKR native
+    const inaugFeeLKR = appSettings.inauguration_fee     || 0;
+    const inaugFeeUSD = appSettings.inauguration_fee_usd || 0;
 
     const tbl = 'width:100%;border-collapse:collapse;font-size:0.82rem;';
     const thS = 'font-size:0.74rem;font-weight:500;color:var(--text-muted);padding:4px 6px 4px 0;';
     const rb  = 'border-top:1px solid rgba(255,255,255,0.07);';
 
+    const catDef       = category ? cats.find(c => c.label === category) : null;
+    const isStudentType = catDef?.is_student || false;
+
     let rows = '';
 
     if (!hasRgn) {
+        // No region: 4-column table showing all categories
         cats.forEach(cat => {
             rows += `<tr style="${rb}">
                 <td style="padding:5px 6px 5px 0;color:var(--text-light);">Main Conf — ${cat.label}</td>
@@ -555,7 +583,7 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
         const elUSD = Math.round(exclLoc / fxRate);
         const efUSD = Math.round(exclFor / fxRate);
         rows += `<tr style="${rb}">
-            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excellence Award <small style="color:var(--text-muted);">/pax</small></td>
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excellence Award (per person)</td>
             <td style="text-align:right;padding:5px 4px;color:var(--accent);">${awdFee.toLocaleString('en-US')}</td>
             <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${awUSD}</td>
             <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${awUSD}</td>
@@ -586,35 +614,58 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
         </div>`;
 
     } else {
-        cats.forEach(cat => {
+        // Region known: single currency. When category is also known, show only that category row.
+        const filteredCats = category ? cats.filter(c => c.label === category) : cats;
+
+        filteredCats.forEach(cat => {
             const rawFee    = isLocal ? cat.fee_local : (isSAARC ? cat.fee_saarc : cat.fee_nonsaarc);
             const nativeCur = isLocal ? 'LKR' : 'USD';
             const dispFee   = toDisp(rawFee, nativeCur);
             const active    = cat.label === category;
-            const hl  = active ? 'background:rgba(197,215,58,0.1);' : '';
-            const nC  = active ? 'color:var(--accent);font-weight:600;'  : 'color:var(--text-light);';
-            const vC  = active ? 'color:var(--accent);font-weight:700;'  : 'color:var(--text-light);';
+            const hl = active ? 'background:rgba(197,215,58,0.1);' : '';
+            const nC = active ? 'color:var(--accent);font-weight:600;' : 'color:var(--text-light);';
+            const vC = active ? 'color:var(--accent);font-weight:700;' : 'color:var(--text-light);';
             rows += `<tr style="${rb}${hl}">
                 <td style="padding:5px 6px 5px 0;${nC}">Main Conf — ${cat.label}${active ? ' ✓' : ''}</td>
                 <td style="text-align:right;padding:5px 6px;${vC}">${dispFee?.toLocaleString('en-US')}</td>
             </tr>`;
         });
+
+        // Inauguration row — only shown when a student-type category is selected and fee > 0
+        if (isStudentType && category) {
+            const inaugFee = isLocal ? inaugFeeLKR : inaugFeeUSD;
+            const inaugCur = isLocal ? 'LKR' : 'USD';
+            if (inaugFee > 0) {
+                const dispFee = toDisp(inaugFee, inaugCur);
+                rows += `<tr style="${rb}">
+                    <td style="padding:5px 6px 5px 0;color:var(--text-muted);font-size:0.8rem;padding-left:10px;">↳ Inauguration opt-in (optional)</td>
+                    <td style="text-align:right;padding:5px 6px;color:var(--text-muted);font-size:0.8rem;">+${dispFee?.toLocaleString('en-US')}</td>
+                </tr>`;
+            }
+        }
+
         rows += `<tr style="${rb}">
-            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excellence Award <small style="color:var(--text-muted);">/pax</small></td>
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excellence Award (per person)</td>
             <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(awdFee, 'LKR')?.toLocaleString('en-US')}</td>
-        </tr>
-        <tr style="${rb}">
-            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Local ticket</td>
-            <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclLoc, 'LKR')?.toLocaleString('en-US')}</td>
-        </tr>
-        <tr style="${rb}">
-            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Foreign ticket</td>
-            <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclFor, 'LKR')?.toLocaleString('en-US')}</td>
         </tr>`;
 
+        // Excursion: show only the ticket type relevant to the attendee's region
+        if (isLocal) {
+            rows += `<tr style="${rb}">
+                <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion ticket</td>
+                <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclLoc, 'LKR')?.toLocaleString('en-US')}</td>
+            </tr>`;
+        } else {
+            rows += `<tr style="${rb}">
+                <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion ticket</td>
+                <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclFor, 'LKR')?.toLocaleString('en-US')}</td>
+            </tr>`;
+        }
+
+        const hdr = category ? `Fee Reference (${dispCur}) — ${category}` : `Fee Reference (${dispCur})`;
         el.innerHTML = `<div style="margin-top:12px;padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
             <div style="font-size:0.74rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
-                <i class='bx bx-receipt' style="margin-right:4px;vertical-align:middle;"></i>Fee Reference (${dispCur})
+                <i class='bx bx-receipt' style="margin-right:4px;vertical-align:middle;"></i>${hdr}
             </div>
             <table style="${tbl}"><thead><tr>
                 <th style="${thS}text-align:left;">Registration Type</th>
@@ -696,6 +747,22 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
     </div>`;
 }
 
+function updateInaugurationLabel(isLocal, hasRgn) {
+    const span = document.getElementById('inauguration-fee-label');
+    if (!span) return;
+    const inaugFeeLKR = appSettings.inauguration_fee     || 0;
+    const inaugFeeUSD = appSettings.inauguration_fee_usd || 0;
+    if (!hasRgn) {
+        span.textContent = (inaugFeeLKR > 0 || inaugFeeUSD > 0)
+            ? `(additional fee: LKR ${inaugFeeLKR.toLocaleString('en-US')} / USD ${inaugFeeUSD})`
+            : '';
+    } else if (isLocal) {
+        span.textContent = inaugFeeLKR > 0 ? `(additional fee: LKR ${inaugFeeLKR.toLocaleString('en-US')})` : '';
+    } else {
+        span.textContent = inaugFeeUSD > 0 ? `(additional fee: USD ${inaugFeeUSD})` : '';
+    }
+}
+
 function calculateTotalFee() {
     updateCostPreviews();
 
@@ -704,14 +771,17 @@ function calculateTotalFee() {
     const isExcursion = document.getElementById('toggleExcursion').checked;
     const isPreConf   = document.getElementById('togglePreConf')?.checked || false;
 
+    const invWrapper = document.getElementById('invoice-download-wrapper');
     if (!isMain && !isAward && !isExcursion && !isPreConf) {
         priceBox.classList.add('hidden');
+        if (invWrapper) invWrapper.classList.add('hidden');
         priceCurrency.textContent = 'LKR';
         priceTotalAmount.textContent = '0.00';
         priceBreakdown.innerHTML = '';
         return;
     }
     priceBox.classList.remove('hidden');
+    if (invWrapper) invWrapper.classList.remove('hidden');
 
     const region = document.getElementById('attendeeRegion').value;
     const isLocalRegion = region === 'Local';
@@ -982,6 +1052,12 @@ function populateFormFromData(data) {
         const el = document.getElementById(id);
         if (el && el.value) el.dispatchEvent(new Event('change'));
     });
+
+    // 5. Restore "Other" purpose text field visibility
+    const prSel = document.getElementById('primaryReason');
+    if (prSel && prSel.value === 'Other') {
+        document.getElementById('primary-reason-other-group')?.classList.remove('hidden');
+    }
 
     calculateTotalFee();
 }
@@ -1671,6 +1747,9 @@ function populateSettingsForm() {
     // Categories & Sessions
     renderCategoriesAdmin();
     renderSessionsAdmin();
+    // Award & Excursion options
+    renderAwardOptionsAdmin();
+    renderExcursionOptionsAdmin();
 }
 
 function renderJournalsAdmin() {
@@ -1748,12 +1827,19 @@ function saveSettings(e) {
     saveCategoriesFromAdmin();
     // Sessions
     saveSessionsFromAdmin();
+    // Award & Excursion dropdown options
+    saveAwardOptionsFromAdmin();
+    saveExcursionOptionsFromAdmin();
 
     // Persist
     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
 
     // Re-populate globals
     populateJournalsDropdown();
+    rebuildAwardCategoryDropdown();
+    rebuildAwardPurposeDropdown();
+    rebuildExcursionMobilityDropdown();
+    rebuildExcursionActivityDropdown();
     // Regenerate paper blocks so Paper ID visibility reflects the current APC collection state
     generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
     updateCostPreviews();
@@ -2110,6 +2196,131 @@ function rebuildSessionCheckboxes() {
     container.querySelectorAll('.price-trigger').forEach(el => {
         el.addEventListener('change', calculateTotalFee);
     });
+}
+
+// ---- AWARD & EXCURSION DROPDOWN REBUILDERS ----
+
+function rebuildAwardCategoryDropdown() {
+    const sel = document.getElementById('awardCategory');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="" disabled selected>Select Category</option>';
+    (appSettings.award_categories || []).forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat; opt.textContent = cat;
+        if (cat === cur) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function rebuildAwardPurposeDropdown() {
+    const sel = document.getElementById('primaryReason');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="" disabled selected>Select Purpose</option>';
+    (appSettings.award_purposes || []).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.textContent = p;
+        if (p === cur) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function rebuildExcursionMobilityDropdown() {
+    const sel = document.getElementById('excrMobility');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '';
+    (appSettings.excursion_mobility_options || []).forEach((opt, i) => {
+        const el = document.createElement('option');
+        el.value = opt; el.textContent = opt;
+        if (opt === cur || (i === 0 && !cur)) el.selected = true;
+        sel.appendChild(el);
+    });
+}
+
+function rebuildExcursionActivityDropdown() {
+    const sel = document.getElementById('excrShopping');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '';
+    (appSettings.excursion_activity_options || []).forEach((opt, i) => {
+        const el = document.createElement('option');
+        el.value = opt; el.textContent = opt;
+        if (opt === cur || (i === 0 && !cur)) el.selected = true;
+        sel.appendChild(el);
+    });
+}
+
+// ---- AWARD & EXCURSION ADMIN SETTINGS ----
+
+function _renderSimpleList(listId, items, cssClass) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    list.innerHTML = '';
+    items.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;';
+        div.innerHTML = `
+            <input type="text" class="${cssClass}" value="${item.replace(/"/g, '&quot;')}" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text-light);font-size:0.88rem;">
+            <button type="button" class="btn-remove-journal" onclick="removeSimpleListItem('${listId}','${cssClass}',${idx})"><i class='bx bx-trash'></i></button>
+        `;
+        list.appendChild(div);
+    });
+}
+
+window.removeSimpleListItem = function(listId, cssClass, idx) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    const items = [...list.querySelectorAll('.' + cssClass)].map(i => i.value.trim()).filter(Boolean);
+    items.splice(idx, 1);
+    list.innerHTML = '';
+    items.forEach((item, i) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;';
+        div.innerHTML = `
+            <input type="text" class="${cssClass}" value="${item.replace(/"/g, '&quot;')}" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text-light);font-size:0.88rem;">
+            <button type="button" class="btn-remove-journal" onclick="removeSimpleListItem('${listId}','${cssClass}',${i})"><i class='bx bx-trash'></i></button>
+        `;
+        list.appendChild(div);
+    });
+};
+
+window.addSimpleListItem = function(listId, cssClass) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    const count = list.querySelectorAll('.' + cssClass).length;
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;';
+    div.innerHTML = `
+        <input type="text" class="${cssClass}" value="" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text-light);font-size:0.88rem;" placeholder="Enter option">
+        <button type="button" class="btn-remove-journal" onclick="removeSimpleListItem('${listId}','${cssClass}',${count})"><i class='bx bx-trash'></i></button>
+    `;
+    list.appendChild(div);
+};
+
+function renderAwardOptionsAdmin() {
+    _renderSimpleList('award-categories-list', appSettings.award_categories || [], 'award-category-item');
+    _renderSimpleList('award-purposes-list',   appSettings.award_purposes   || [], 'award-purpose-item');
+}
+
+function renderExcursionOptionsAdmin() {
+    _renderSimpleList('excursion-mobility-list', appSettings.excursion_mobility_options || [], 'mobility-item');
+    _renderSimpleList('excursion-activity-list', appSettings.excursion_activity_options || [], 'activity-item');
+}
+
+function saveAwardOptionsFromAdmin() {
+    const cats  = document.querySelectorAll('#award-categories-list .award-category-item');
+    const purps = document.querySelectorAll('#award-purposes-list .award-purpose-item');
+    appSettings.award_categories = [...cats].map(i => i.value.trim()).filter(Boolean);
+    appSettings.award_purposes   = [...purps].map(i => i.value.trim()).filter(Boolean);
+}
+
+function saveExcursionOptionsFromAdmin() {
+    const mob = document.querySelectorAll('#excursion-mobility-list .mobility-item');
+    const act = document.querySelectorAll('#excursion-activity-list .activity-item');
+    appSettings.excursion_mobility_options = [...mob].map(i => i.value.trim()).filter(Boolean);
+    appSettings.excursion_activity_options = [...act].map(i => i.value.trim()).filter(Boolean);
 }
 
 // Run init

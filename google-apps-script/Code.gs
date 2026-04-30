@@ -193,8 +193,11 @@ function upsertMasterSheet(data, mainFolder, folderUrl) {
       'Organization', 'Attendee_Region', 'Country', 'Attendee_Category',
       'Registration_Type', 'Calculated_Total_Fee', 'Currency',
       'Certificate_Name', 'Designation', 'Food_Preference', 'Number_of_Papers',
+      'Include_Inauguration',
       'Company_Name', 'Participant_Count', 'Award_Category',
+      'Primary_Reason', 'Primary_Reason_Other',
       'Excursion_Local_Count', 'Excursion_Foreign_Count',
+      'Excursion_Mobility', 'Excursion_Activity',
       'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL'
     ]);
   }
@@ -239,11 +242,16 @@ function buildRow(headers, data, folderUrl) {
     Designation:           data.Designation            || '',
     Food_Preference:       data.Food_Preference        || '',
     Number_of_Papers:      data.Number_of_Papers       || '',
+    Include_Inauguration:  data.Include_Inauguration   || '',
     Company_Name:          data.Company_Name           || '',
     Participant_Count:     data.Participant_Count      || '',
     Award_Category:        data.Award_Category         || '',
+    Primary_Reason:        data.Primary_Reason         || '',
+    Primary_Reason_Other:  data.Primary_Reason_Other   || '',
     Excursion_Local_Count: data.Excursion_Local_Count  || '',
     Excursion_Foreign_Count: data.Excursion_Foreign_Count || '',
+    Excursion_Mobility:    data.Excursion_Mobility     || '',
+    Excursion_Activity:    data.Excursion_Activity     || '',
     Transaction_Ref:       data.Transaction_Ref        || '',
     Additional_Info:       data.Additional_Info        || '',
     Drive_Folder_URL:      folderUrl                   || ''
