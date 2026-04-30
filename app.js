@@ -1866,8 +1866,11 @@ function saveSettings(e) {
     saveAwardOptionsFromAdmin();
     saveExcursionOptionsFromAdmin();
 
-    // Persist
+    // Persist locally
     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+
+    // Persist to Google Drive (async, non-blocking)
+    pushSettingsToDrive();
 
     // Re-populate globals
     populateJournalsDropdown();
@@ -1878,7 +1881,7 @@ function saveSettings(e) {
     // Regenerate paper blocks so Paper ID visibility reflects the current APC collection state
     generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
     updateCostPreviews();
-    showToast('Pricing Settings saved successfully!', 'success');
+    showToast('Settings saved — syncing to Google Drive…', 'success');
 }
 
 function populateJournalsDropdown() {
@@ -2363,5 +2366,53 @@ function saveExcursionOptionsFromAdmin() {
     appSettings.excursion_activity_options = [...act].map(i => i.value.trim()).filter(Boolean);
 }
 
+// ---------------------------------------------------------------------------
+// Drive settings sync
+// ---------------------------------------------------------------------------
+
+// Push current appSettings to Google Drive (fire-and-forget via no-cors POST)
+async function pushSettingsToDrive() {
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify({ action: 'saveSettings', adminKey: ADMIN_KEY, settings: appSettings })
+        });
+    } catch (err) {
+        console.warn('Could not push settings to Drive:', err);
+    }
+}
+
+// Load settings from Drive on startup; overrides localStorage if Drive has a copy.
+// Runs async after init() so the UI is never blocked.
+async function loadSettingsFromDrive() {
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+    try {
+        const resp = await fetch(APPS_SCRIPT_URL + '?action=getSettings', { cache: 'no-store' });
+        if (!resp.ok) return;
+        const json = await resp.json();
+        if (!json.success || !json.settings) return;
+
+        appSettings = json.settings;
+        localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+
+        // Re-render everything that depends on settings
+        populateSettingsForm();
+        populateJournalsDropdown();
+        rebuildCategoryDropdown();
+        rebuildSessionCheckboxes();
+        rebuildAwardCategoryDropdown();
+        rebuildAwardPurposeDropdown();
+        rebuildExcursionMobilityDropdown();
+        rebuildExcursionActivityDropdown();
+        generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
+        updateCostPreviews();
+    } catch (err) {
+        console.warn('Could not load settings from Drive:', err);
+    }
+}
+
 // Run init
 init();
+loadSettingsFromDrive();

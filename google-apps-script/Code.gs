@@ -46,6 +46,10 @@ function doPost(e) {
       return handleSaveInvoice(data);
     }
 
+    if (action === 'saveSettings') {
+      return handleSaveSettings(data);
+    }
+
     return handleSubmitRegistration(data);
   } catch (err) {
     Logger.log('doPost error: ' + err.toString());
@@ -78,6 +82,20 @@ function doGet(e) {
     try {
       const data = getRegistrationByRef(ref);
       return jsonResponse({ success: true, data: data });
+    } catch (err) {
+      return jsonResponse({ success: false, error: err.toString() });
+    }
+  }
+
+  if (action === 'getSettings') {
+    try {
+      const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+      const files = mainFolder.getFilesByName('sicet2026_settings.json');
+      if (files.hasNext()) {
+        const content = files.next().getBlob().getDataAsString();
+        return jsonResponse({ success: true, settings: JSON.parse(content) });
+      }
+      return jsonResponse({ success: false, error: 'No settings file found' });
     } catch (err) {
       return jsonResponse({ success: false, error: err.toString() });
     }
@@ -172,6 +190,31 @@ function handleSaveInvoice(data) {
   }
 
   return jsonResponse({ success: true });
+}
+
+// ---------------------------------------------------------------------------
+// handleSaveSettings — persist admin settings JSON to Drive
+// ---------------------------------------------------------------------------
+function handleSaveSettings(data) {
+  if (data.adminKey !== ADMIN_KEY) {
+    return jsonResponse({ success: false, error: 'Unauthorized' });
+  }
+  if (!data.settings) {
+    return jsonResponse({ success: false, error: 'No settings payload' });
+  }
+  try {
+    const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+    deleteFilesByName(mainFolder, 'sicet2026_settings.json');
+    mainFolder.createFile(
+      'sicet2026_settings.json',
+      JSON.stringify(data.settings, null, 2),
+      MimeType.PLAIN_TEXT
+    );
+    return jsonResponse({ success: true });
+  } catch (err) {
+    Logger.log('handleSaveSettings error: ' + err.toString());
+    return jsonResponse({ success: false, error: err.toString() });
+  }
 }
 
 // ---------------------------------------------------------------------------
