@@ -2864,12 +2864,55 @@ const WA_CONTACTS = {
     other:   { name: 'Dr. Gayashika Fernando',  number: '94777402892', role: 'Registration Chair' }
 };
 
+function gatherWaContext() {
+    const refId   = (document.getElementById('reg-ref-id')?.textContent || '').trim();
+    const email   = (document.getElementById('email')?.value            || '').trim();
+    const nPapers = parseInt(document.getElementById('numberOfPapers')?.value) || 0;
+
+    const papers = [];
+    for (let i = 1; i <= nPapers; i++) {
+        const pid   = (document.getElementById(`paperId_${i}`)?.value    || '').trim();
+        const title = (document.getElementById(`paperTitle_${i}`)?.value || '').trim();
+        if (title) papers.push(pid ? `[${pid}] ${title}` : title);
+    }
+
+    return { refId: refId !== '—' ? refId : '', email, papers };
+}
+
+function refreshWaContextBox() {
+    const box = document.getElementById('wa-reg-context');
+    if (!box) return;
+    const ctx = gatherWaContext();
+    const rows = [];
+    if (ctx.refId) rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Reference ID</span><span style="color:var(--text-light);font-size:0.82rem;font-weight:600;font-family:monospace;">${ctx.refId}</span></div>`);
+    if (ctx.email) rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Email</span><span style="color:var(--text-light);font-size:0.82rem;">${ctx.email}</span></div>`);
+    ctx.papers.forEach((p, i) => rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Paper ${i + 1}</span><span style="color:var(--text-light);font-size:0.82rem;">${p}</span></div>`));
+
+    // Hide manual paper ID field when papers are already detected from the form
+    const paperIdGroup = document.getElementById('wa-paper-id-group');
+    if (paperIdGroup) paperIdGroup.style.display = ctx.papers.length ? 'none' : '';
+
+    if (!rows.length) { box.style.display = 'none'; return; }
+
+    box.innerHTML = `
+        <div style="padding:10px 14px;background:rgba(74,104,255,0.07);border:1px solid rgba(74,104,255,0.25);border-radius:10px;">
+            <p style="margin:0 0 8px;font-size:0.8rem;color:#4a9eff;font-weight:600;display:flex;align-items:center;gap:5px;">
+                <i class='bx bx-link-alt'></i> Auto-detected from your registration — will be included in the message
+            </p>
+            <div style="display:flex;flex-direction:column;gap:4px;">${rows.join('')}</div>
+        </div>`;
+    box.style.display = 'block';
+}
+
 function updateWhatsAppContact() {
     // Auto-fill from main registration form if the user already entered their details
     const waName   = document.getElementById('wa-name');
     const waMobile = document.getElementById('wa-mobile');
     if (waName   && !waName.value)   waName.value   = document.getElementById('fullName')?.value || '';
     if (waMobile && !waMobile.value) waMobile.value = document.getElementById('phone')?.value    || '';
+
+    // Refresh registration context box
+    refreshWaContextBox();
 
     const type    = document.getElementById('wa-issue-type')?.value || '';
     const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
@@ -2939,27 +2982,34 @@ function sendWhatsAppQuery() {
     }
 
     const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
+    const ctx     = gatherWaContext();
+    const issueTypeLabel = document.getElementById('wa-issue-type').options[document.getElementById('wa-issue-type').selectedIndex].text;
 
     // Collect selected workshops (only for preconf type)
-    let workshopLine = '';
-    if (type === 'preconf') {
-        const checked = [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value);
-        if (checked.length) workshopLine = `\nWorkshop(s) : ${checked.join(', ')}`;
-    }
+    const selectedWorkshops = type === 'preconf'
+        ? [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value)
+        : [];
 
-    const lines = [
-        'Quarries – SICET 2026',
-        '──────────────────',
-        `Name    : ${name}`,
-        `Mobile  : ${mobile}`,
-        paperId ? `Paper ID : ${paperId}` : null,
-        `Category : ${document.getElementById('wa-issue-type').options[document.getElementById('wa-issue-type').selectedIndex].text}`,
-        workshopLine || null,
-        '──────────────────',
-        `Issue   : ${issue}`
-    ].filter(l => l !== null).join('\n');
+    const lines = ['Quarries – SICET 2026', '──────────────────'];
 
-    const encoded = encodeURIComponent(lines);
+    // Sender details
+    lines.push(`Name     : ${name}`);
+    lines.push(`Mobile   : ${mobile}`);
+    if (ctx.email) lines.push(`Email    : ${ctx.email}`);
+    if (ctx.refId) lines.push(`Ref ID   : ${ctx.refId}`);
+    ctx.papers.forEach((p, i) => lines.push(`Paper ${i + 1}  : ${p}`));
+
+    lines.push('──────────────────');
+
+    // Issue classification
+    lines.push(`Query re : ${issueTypeLabel}`);
+    if (selectedWorkshops.length) lines.push(`Workshop : ${selectedWorkshops.join(', ')}`);
+    if (paperId && !ctx.papers.length) lines.push(`Paper ID : ${paperId}`);
+
+    lines.push('──────────────────');
+    lines.push(`Issue    : ${issue}`);
+
+    const encoded = encodeURIComponent(lines.join('\n'));
     window.open(`https://wa.me/${contact.number}?text=${encoded}`, '_blank', 'noopener');
 }
 

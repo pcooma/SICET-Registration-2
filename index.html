@@ -580,6 +580,9 @@
                     </div>
                 </div>
 
+                <!-- Auto-detected registration context -->
+                <div id="wa-reg-context" style="display:none;margin-bottom:16px;"></div>
+
                 <!-- Step 2: Issue category -->
                 <div style="margin-bottom:6px;">
                     <p style="margin:0 0 10px;font-size:0.8rem;font-weight:600;color:var(--accent);letter-spacing:0.5px;text-transform:uppercase;">Issue Details</p>
@@ -602,9 +605,9 @@
                         </div>
                     </div>
 
-                    <div class="form-group row" style="margin-bottom:12px;">
+                    <div id="wa-paper-id-group" class="form-group row" style="margin-bottom:12px;">
                         <div class="input-field col">
-                            <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional — if not already in registration above)</span></label>
                             <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or your paper title" style="font-size:0.88rem;">
                         </div>
                     </div>
@@ -985,7 +988,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=48"></script>
+    <script src="app.js?v=49"></script>
 </body>
 
 </html>
