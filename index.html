@@ -10,7 +10,7 @@
         rel="stylesheet">
     <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="stylesheet" href="style.css?v=13">
     <style>@keyframes sicet-spin { to { transform: rotate(360deg); } }</style>
 </head>
 
@@ -431,11 +431,23 @@
                         <div class="highlight-box" style="background:rgba(0,120,200,0.06);border:1px solid rgba(0,150,255,0.25);margin-bottom:18px;padding:14px 18px;">
                             <h4 style="color:#4a9eff;margin-bottom:10px;font-size:0.93rem;"><i class='bx bx-info-circle' style="margin-right:6px;"></i>Payment Methods &amp; Policies</h4>
                             <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:0.87rem;line-height:2;">
-                                <li><strong style="color:var(--text-light);">Direct Deposit:</strong> Available for local (Sri Lanka) attendees only.</li>
-                                <li><strong style="color:var(--text-light);">Wire Transfer:</strong> Payment must be received within 30 days of registration.</li>
-                                <li><strong style="color:var(--text-light);">Debit/Credit Card:</strong> A 1.5% processing commission will be added to your total at checkout.</li>
+                                <li><strong style="color:var(--text-light);">Direct Deposit (USD):</strong> Recommended for international participants. Bank transfer to Sampath Bank PLC, Malabe Branch — see bank details on your invoice.</li>
+                                <li><strong style="color:var(--text-light);">Wire Transfer (LKR):</strong> Recommended for participants with Sri Lankan banking access. Use the same Sampath Bank account details.</li>
+                                <li><strong style="color:var(--text-light);">Debit/Credit Card (LKR):</strong> Pay online via the SLIIT Payment Gateway. A 1.5% bank service charge applies. Exchange rate: 1 USD = 325 LKR (indicative).</li>
                                 <li><strong style="color:var(--text-light);">Refund Policy:</strong> All refund requests must be sent to <a href="mailto:sicet@sliit.lk" style="color:#4a9eff;">sicet@sliit.lk</a> by <span id="notice-refund-deadline">August 23, 2025</span>. An administrative fee of US$20 / LKR 6,000 applies to all refunds.</li>
                             </ul>
+                            <!-- Bank Details Summary -->
+                            <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:0.84rem;">
+                                <div style="color:var(--text-light);font-weight:600;margin-bottom:6px;"><i class='bx bx-building-house' style="margin-right:5px;color:#4a9eff;"></i>Bank Transfer Details</div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;color:var(--text-muted);">
+                                    <span><strong style="color:var(--text-light);">Bank:</strong> Sampath Bank PLC</span>
+                                    <span><strong style="color:var(--text-light);">Branch:</strong> Malabe Branch</span>
+                                    <span><strong style="color:var(--text-light);">Account No:</strong> 003910003002</span>
+                                    <span><strong style="color:var(--text-light);">SWIFT / BIC:</strong> BSAMLKLX</span>
+                                    <span style="grid-column:1/-1;"><strong style="color:var(--text-light);">Account Name:</strong> Sri Lanka Institute of Information Technology (Gte) Ltd.</span>
+                                </div>
+                                <div style="margin-top:6px;color:var(--text-muted);font-size:0.8rem;"><i class='bx bx-info-circle' style="color:#4a9eff;margin-right:4px;"></i>Use your <strong style="color:var(--text-light);">Reference ID</strong> as the payment description/reference.</div>
+                            </div>
                         </div>
 
                         <div class="highlight-box" style="background:rgba(197,215,58,0.06);border:1px dashed rgba(197,215,58,0.35);margin-bottom:20px;padding:16px 20px;">
@@ -485,13 +497,34 @@
 
                         <div class="highlight-box" style="margin-bottom:20px;">
                             <h4 style="color:var(--accent);margin-bottom:12px;"><i class='bx bx-credit-card' style="margin-right:6px;"></i>How to Make Your Payment</h4>
-                            <ol style="margin:0;padding-left:1.4rem;color:var(--text-light);line-height:2;">
-                                <li>Visit the SLIIT payment portal: <a href="https://pay.sliit.lk/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;">https://pay.sliit.lk/</a></li>
-                                <li>Under <strong style="color:var(--accent);">Purpose of Payment</strong>, select <strong>"Any other payment"</strong>.</li>
-                                <li>In the <strong style="color:var(--accent);">Description</strong> field, enter your <strong>Reference ID</strong> (shown above).</li>
-                                <li>Complete the payment and save your transaction receipt.</li>
-                                <li>Upload the receipt below and click Submit.</li>
-                            </ol>
+
+                            <!-- Option A: Card via SLIIT Gateway -->
+                            <div style="margin-bottom:14px;">
+                                <div style="color:var(--text-light);font-weight:600;font-size:0.9rem;margin-bottom:6px;"><i class='bx bx-credit-card-front' style="color:var(--accent);margin-right:6px;"></i>Option A — Debit/Credit Card (LKR, 1.5% charge)</div>
+                                <ol style="margin:0;padding-left:1.4rem;color:var(--text-light);line-height:2;font-size:0.9rem;">
+                                    <li>Visit the SLIIT payment portal: <a href="https://pay.sliit.lk/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;">https://pay.sliit.lk/</a></li>
+                                    <li>Under <strong style="color:var(--accent);">Purpose of Payment</strong>, select <strong>"Any other payment"</strong>.</li>
+                                    <li>In the <strong style="color:var(--accent);">Description</strong> field, enter your <strong>Reference ID</strong> (shown above).</li>
+                                    <li>Complete the payment and download/screenshot your receipt.</li>
+                                </ol>
+                            </div>
+
+                            <!-- Option B: Bank Transfer -->
+                            <div style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">
+                                <div style="color:var(--text-light);font-weight:600;font-size:0.9rem;margin-bottom:6px;"><i class='bx bx-transfer' style="color:var(--accent);margin-right:6px;"></i>Option B — Bank Transfer (USD / LKR)</div>
+                                <div style="background:rgba(197,215,58,0.05);border:1px solid rgba(197,215,58,0.2);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:0.84rem;">
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;color:var(--text-muted);">
+                                        <span><strong style="color:var(--text-light);">Bank:</strong> Sampath Bank PLC</span>
+                                        <span><strong style="color:var(--text-light);">Branch:</strong> Malabe Branch</span>
+                                        <span><strong style="color:var(--text-light);">Account No:</strong> 003910003002</span>
+                                        <span><strong style="color:var(--text-light);">SWIFT / BIC:</strong> BSAMLKLX</span>
+                                        <span style="grid-column:1/-1;"><strong style="color:var(--text-light);">Account Name:</strong> Sri Lanka Institute of Information Technology (Gte) Ltd.</span>
+                                    </div>
+                                </div>
+                                <p style="margin:0;color:var(--text-muted);font-size:0.85rem;line-height:1.7;">Use your <strong style="color:var(--accent);">Reference ID</strong> as the payment description. USD transfers are recommended for international participants; LKR for those with local banking access.</p>
+                            </div>
+
+                            <p style="margin:12px 0 0;color:var(--text-muted);font-size:0.85rem;"><i class='bx bx-upload' style="color:var(--accent);margin-right:4px;"></i>After completing payment, upload your receipt/proof below and click <strong>Submit Registration</strong>.</p>
                         </div>
 
                         <div class="form-group row">
@@ -517,6 +550,37 @@
                         </div>
                     </div>
                 </form>
+            </div>
+            <!-- WhatsApp Contact / Query Box -->
+            <div class="form-wrapper glass-panel" style="margin-top:20px;">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                    <div style="width:42px;height:42px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.35);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class='bx bxl-whatsapp' style="font-size:1.5rem;color:#25d366;"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin:0;font-size:1rem;color:var(--text-light);font-weight:600;">Contact Registration Chair</h3>
+                        <p style="margin:0;font-size:0.82rem;color:var(--text-muted);">For queries, email <a href="mailto:gayashika.f@sliit.lk" style="color:var(--accent);">gayashika.f@sliit.lk</a> or send a WhatsApp message below.</p>
+                    </div>
+                </div>
+
+                <div class="form-group row" style="margin-bottom:12px;">
+                    <div class="input-field col">
+                        <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or paper title" style="font-size:0.88rem;">
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:14px;">
+                    <label for="wa-issue" style="font-size:0.85rem;">Describe your issue or query <span class="required">*</span></label>
+                    <textarea id="wa-issue" rows="3" placeholder="Type your question or issue here…" style="font-size:0.88rem;resize:vertical;"></textarea>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <button type="button" id="btn-send-whatsapp" onclick="sendWhatsAppQuery()"
+                        style="display:inline-flex;align-items:center;gap:8px;padding:10px 22px;background:linear-gradient(135deg,rgba(37,211,102,0.25),rgba(37,211,102,0.1));border:1px solid rgba(37,211,102,0.5);border-radius:8px;color:#25d366;font-weight:600;font-size:0.92rem;font-family:inherit;cursor:pointer;">
+                        <i class='bx bxl-whatsapp' style="font-size:1.15rem;"></i> Send via WhatsApp
+                    </button>
+                    <span style="color:var(--text-muted);font-size:0.8rem;">Opens WhatsApp with a pre-filled message to the registration chair.</span>
+                </div>
             </div>
         </section>
 
@@ -871,7 +935,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=45"></script>
+    <script src="app.js?v=46"></script>
 </body>
 
 </html>

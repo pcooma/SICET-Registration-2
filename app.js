@@ -35,7 +35,7 @@ const defaultSettings = {
     ],
     chair_name: 'Dr. Gayashika Fernando',
     refund_deadline: 'August 23, 2025',
-    usd_to_lkr: 320,
+    usd_to_lkr: 325,
     apc_collection_active: false,
     award_categories: ['Innovation', 'Sustainability', 'Leadership'],
     award_purposes: ['Networking', 'To Receive Award', 'Other'],
@@ -1473,8 +1473,8 @@ function generateInvoice() {
 
     const bY = Y + 10;
     const c1 = L + 4, c2 = L + 30, c3 = L + 97, c4 = L + 121;
-    const bankLeft = [['Bank:', 'Bank of Ceylon'], ['Account Name:', 'SICET 2026 — SLIIT'], ['Branch:', 'Malabe Branch']];
-    const bankRight = [['Account No:', '1234567890'], ['SWIFT / BIC:', 'BCEYLKLX']];
+    const bankLeft = [['Bank:', 'Sampath Bank PLC'], ['Account Name:', 'Sri Lanka Institute of Information Technology (Gte) Ltd.'], ['Branch:', 'Malabe Branch']];
+    const bankRight = [['Account No:', '003910003002'], ['SWIFT / BIC:', 'BSAMLKLX']];
 
     doc.setFontSize(7.5);
     bankLeft.forEach(([lbl, val], i) => {
@@ -1486,7 +1486,7 @@ function generateInvoice() {
         doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.text(val, c4, bY + i * 4.8);
     });
     doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(110, 110, 110);
-    doc.text(`* Use "${fullName} — ${invoiceNum}" as payment reference.`, L + 4, Y + bankBoxH - 3);
+    doc.text(`* Use your Reference ID "${invoiceNum}" as the payment reference / description.`, L + 4, Y + bankBoxH - 3);
 
     Y += bankBoxH + 4;
 
@@ -1521,9 +1521,9 @@ function generateInvoice() {
     Y += 4.5;
 
     const notes = [
-        'Direct Deposit: Available for local (Sri Lanka) attendees only.',
-        'Wire Transfer: Payment must be received within 30 days of registration.',
-        'Debit/Credit Card: A 1.5% commission will be added to the total.',
+        'Direct Deposit (USD): Recommended for international participants. Transfer to Sampath Bank PLC via SWIFT (BSAMLKLX), Account No. 003910003002.',
+        'Wire Transfer (LKR): Use the same Sampath Bank account. Recommended for participants with Sri Lankan banking access.',
+        'Debit/Credit Card (LKR): Pay via the SLIIT Payment Gateway (pay.sliit.lk). A 1.5% bank service charge applies.',
         `Refund Policy: Requests must be sent to sicet@sliit.lk by ${refundDeadline}. Admin fee: US$20 / LKR 6,000.`
     ];
 
@@ -2852,6 +2852,28 @@ async function pushSettingsToDrive() {
         console.warn('Could not push settings to Drive:', err);
         return false;
     }
+}
+
+// ---------------------------------------------------------------------------
+// WhatsApp query sender
+// ---------------------------------------------------------------------------
+function sendWhatsAppQuery() {
+    const paperId = (document.getElementById('wa-paper-id')?.value || '').trim();
+    const issue   = (document.getElementById('wa-issue')?.value   || '').trim();
+
+    if (!issue) {
+        showToast('Please describe your issue or query before sending.', 'error');
+        document.getElementById('wa-issue')?.focus();
+        return;
+    }
+
+    const subject = paperId
+        ? `Quarries – SICET 2026 - ${paperId}`
+        : 'Quarries – SICET 2026';
+
+    const message = `${subject}\nIssue : ${issue}`;
+    const encoded = encodeURIComponent(message);
+    window.open(`https://wa.me/94777402892?text=${encoded}`, '_blank', 'noopener');
 }
 
 // Run init
