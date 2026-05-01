@@ -2888,10 +2888,6 @@ function refreshWaContextBox() {
     if (ctx.email) rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Email</span><span style="color:var(--text-light);font-size:0.82rem;">${ctx.email}</span></div>`);
     ctx.papers.forEach((p, i) => rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Paper ${i + 1}</span><span style="color:var(--text-light);font-size:0.82rem;">${p}</span></div>`));
 
-    // Hide manual paper ID field when papers are already detected from the form
-    const paperIdGroup = document.getElementById('wa-paper-id-group');
-    if (paperIdGroup) paperIdGroup.style.display = ctx.papers.length ? 'none' : '';
-
     if (!rows.length) { box.style.display = 'none'; return; }
 
     box.innerHTML = `
@@ -2928,13 +2924,9 @@ function updateWhatsAppContact() {
         }
     }
 
-    // Update contact hint
-    const hint    = document.getElementById('wa-contact-hint');
-    const hintTxt = document.getElementById('wa-contact-hint-text');
-    if (hint && hintTxt && type) {
-        hintTxt.innerHTML = `Your message will be sent to <strong>${contact.name}</strong> — ${contact.role}.`;
-        hint.style.display = 'block';
-    }
+    // Paper ID field: hidden for preconf (workshops cover that), visible for all other categories
+    const paperIdGroup = document.getElementById('wa-paper-id-group');
+    if (paperIdGroup) paperIdGroup.style.display = (type && type !== 'preconf') ? '' : 'none';
 }
 
 function renderWhatsAppWorkshops() {

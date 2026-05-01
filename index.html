@@ -605,7 +605,7 @@
                         </div>
                     </div>
 
-                    <div id="wa-paper-id-group" class="form-group row" style="margin-bottom:12px;">
+                    <div id="wa-paper-id-group" class="form-group row" style="display:none;margin-bottom:12px;">
                         <div class="input-field col">
                             <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional — if not already in registration above)</span></label>
                             <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or your paper title" style="font-size:0.88rem;">
@@ -617,21 +617,12 @@
                     </div>
                 </div>
 
-                <!-- Routed contact hint -->
-                <div id="wa-contact-hint" style="display:none;margin-bottom:16px;padding:10px 14px;border-radius:10px;font-size:0.84rem;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.25);">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <i class='bx bx-user-circle' style="color:#25d366;font-size:1.2rem;flex-shrink:0;"></i>
-                        <span id="wa-contact-hint-text" style="color:var(--text-light);"></span>
-                    </div>
-                </div>
-
                 <!-- Send button -->
-                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                <div>
                     <button type="button" id="btn-send-whatsapp" onclick="sendWhatsAppQuery()"
                         style="display:inline-flex;align-items:center;gap:8px;padding:11px 26px;background:linear-gradient(135deg,rgba(37,211,102,0.25),rgba(37,211,102,0.1));border:1px solid rgba(37,211,102,0.5);border-radius:8px;color:#25d366;font-weight:700;font-size:0.95rem;font-family:inherit;cursor:pointer;">
                         <i class='bx bxl-whatsapp' style="font-size:1.2rem;"></i> Send via WhatsApp
                     </button>
-                    <span style="color:var(--text-muted);font-size:0.8rem;line-height:1.5;">Your message will be routed to the<br>appropriate SICET 2026 coordinator.</span>
                 </div>
 
             </div>
@@ -988,7 +979,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=49"></script>
+    <script src="app.js?v=50"></script>
 </body>
 
 </html>
