@@ -2857,6 +2857,8 @@ async function pushSettingsToDrive() {
 // ---------------------------------------------------------------------------
 // WhatsApp query sender
 // ---------------------------------------------------------------------------
+let waLoadedData = null; // set by loadWaRegistration()
+
 const WA_CONTACTS = {
     preconf: { name: 'Dr. Nandika Miguntanna',      number: '94718548966', role: 'Pre-Conference Workshops Coordinator' },
     award:   { name: 'Ms. Angel Shanali Oshaji',    number: '94760255850', role: 'Excellence Award Coordinator' },
@@ -2866,18 +2868,90 @@ const WA_CONTACTS = {
 };
 
 function gatherWaContext() {
+    // If a registration was loaded via the widget's ref ID lookup, prefer that data
+    if (waLoadedData) {
+        const refId   = (waLoadedData.Invoice_ID || '').trim();
+        const email   = (waLoadedData.Email       || '').trim();
+        const nPapers = parseInt(waLoadedData.Number_of_Papers) || 0;
+        const papers  = [];
+        for (let i = 1; i <= nPapers; i++) {
+            const pid   = (waLoadedData[`paperId_${i}`]    || '').trim();
+            const title = (waLoadedData[`paperTitle_${i}`] || '').trim();
+            if (title) papers.push(pid ? `[${pid}] ${title}` : title);
+        }
+        return { refId, email, papers };
+    }
+
+    // Fall back to reading from the main registration form
     const refId   = (document.getElementById('reg-ref-id')?.textContent || '').trim();
     const email   = (document.getElementById('email')?.value            || '').trim();
     const nPapers = parseInt(document.getElementById('numberOfPapers')?.value) || 0;
-
-    const papers = [];
+    const papers  = [];
     for (let i = 1; i <= nPapers; i++) {
         const pid   = (document.getElementById(`paperId_${i}`)?.value    || '').trim();
         const title = (document.getElementById(`paperTitle_${i}`)?.value || '').trim();
         if (title) papers.push(pid ? `[${pid}] ${title}` : title);
     }
-
     return { refId: refId !== '—' ? refId : '', email, papers };
+}
+
+async function loadWaRegistration() {
+    const refId = (document.getElementById('wa-ref-lookup')?.value || '').trim();
+    if (!refId) { showToast('Please enter your Reference ID.', 'error'); return; }
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+        showToast('Google Drive not configured.', 'error'); return;
+    }
+
+    const btn = document.getElementById('btn-wa-load-ref');
+    const statusDiv = document.getElementById('wa-ref-status');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bx bx-loader bx-spin"></i>'; }
+    if (statusDiv) statusDiv.style.display = 'none';
+
+    try {
+        const url = APPS_SCRIPT_URL + '?action=getRegistrationByRef&ref=' + encodeURIComponent(refId);
+        const res  = await fetch(url);
+        const result = await res.json();
+
+        if (!result.success || !result.data) {
+            if (statusDiv) {
+                statusDiv.innerHTML = `<span style="color:#ff6b6b;display:flex;align-items:center;gap:6px;"><i class='bx bx-error-circle'></i> Not found — please check your Reference ID.</span>`;
+                statusDiv.style.display = 'block';
+            }
+            waLoadedData = null;
+            return;
+        }
+
+        waLoadedData = result.data;
+
+        const waName   = document.getElementById('wa-name');
+        const waMobile = document.getElementById('wa-mobile');
+        if (waName   && !waName.value)   waName.value   = result.data.Full_Name || '';
+        if (waMobile && !waMobile.value) waMobile.value = result.data.Phone     || '';
+
+        if (statusDiv) {
+            statusDiv.innerHTML = `<span style="color:#25d366;display:flex;align-items:center;gap:6px;"><i class='bx bx-check-circle'></i> Loaded: <strong>${result.data.Full_Name || refId}</strong></span>`;
+            statusDiv.style.display = 'block';
+        }
+
+        refreshWaContextBox();
+        renderWaPreview();
+        showToast(`Details loaded for ${result.data.Full_Name || refId}`, 'success');
+    } catch (_) {
+        showToast('Could not connect. Please check your connection and try again.', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bx bx-search"></i> Load'; }
+    }
+}
+
+function onWaRefInput() {
+    const val = (document.getElementById('wa-ref-lookup')?.value || '').trim();
+    if (!val) {
+        waLoadedData = null;
+        const statusDiv = document.getElementById('wa-ref-status');
+        if (statusDiv) statusDiv.style.display = 'none';
+        refreshWaContextBox();
+    }
+    renderWaPreview();
 }
 
 function refreshWaContextBox() {
@@ -2903,7 +2977,14 @@ function refreshWaContextBox() {
 }
 
 function updateWhatsAppContact() {
-    // Auto-fill from main registration form if the user already entered their details
+    // Sync ref ID from main form → widget lookup field (bidirectional link)
+    const waRefLookup = document.getElementById('wa-ref-lookup');
+    const formRefId   = (document.getElementById('reg-ref-id')?.textContent || '').trim();
+    if (waRefLookup && !waRefLookup.value && formRefId && formRefId !== '—') {
+        waRefLookup.value = formRefId;
+    }
+
+    // Auto-fill name/mobile from main registration form if not already entered
     const waName   = document.getElementById('wa-name');
     const waMobile = document.getElementById('wa-mobile');
     if (waName   && !waName.value)   waName.value   = document.getElementById('fullName')?.value || '';
