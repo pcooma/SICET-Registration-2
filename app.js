@@ -1127,6 +1127,12 @@ function populateFormFromData(data) {
     }
 
     calculateTotalFee();
+
+    // Sync loaded name/phone into the WhatsApp widget fields
+    const _waName = document.getElementById('wa-name');
+    const _waMob  = document.getElementById('wa-mobile');
+    if (_waName && data.Full_Name) _waName.value = data.Full_Name;
+    if (_waMob  && data.Phone)     _waMob.value  = data.Phone;
 }
 
 // STEP 1 — Save draft + get Ref ID (no payment proof required)
@@ -2860,10 +2866,10 @@ async function pushSettingsToDrive() {
 let waLoadedData = null; // set by loadWaRegistration()
 
 const WA_CONTACTS = {
-    preconf: { name: 'Dr. Nandika Miguntanna',      number: '94718548966', role: 'Pre-Conference Workshops Coordinator' },
+    preconf: { name: 'Dr. Nandika Miguntanna',      number: '94718548966', role: 'Pre-Conference Workshops Chair' },
     award:   { name: 'Ms. Angel Shanali Oshaji',    number: '94760255850', role: 'Excellence Award Coordinator' },
     payment: { name: 'Dr. Gayashika Fernando',      number: '94777402892', role: 'Registration Chair' },
-    general: { name: 'Mr. Sudara Withana',          number: '94774014463', role: 'Conference Coordinator' },
+    general: { name: 'Mr. Sudara Withana',          number: '94774014463', role: 'Conference Co-Secretary' },
     other:   { name: 'Dr. Gayashika Fernando',      number: '94777402892', role: 'Registration Chair' }
 };
 
@@ -2923,10 +2929,13 @@ async function loadWaRegistration() {
 
         waLoadedData = result.data;
 
-        const waName   = document.getElementById('wa-name');
-        const waMobile = document.getElementById('wa-mobile');
-        if (waName   && !waName.value)   waName.value   = result.data.Full_Name || '';
-        if (waMobile && !waMobile.value) waMobile.value = result.data.Phone     || '';
+        // Fill widget fields and main form fields unconditionally
+        const _wn = document.getElementById('wa-name');
+        const _wm = document.getElementById('wa-mobile');
+        const _fn = document.getElementById('fullName');
+        const _ph = document.getElementById('phone');
+        if (result.data.Full_Name) { if (_wn) _wn.value = result.data.Full_Name; if (_fn) _fn.value = result.data.Full_Name; }
+        if (result.data.Phone)     { if (_wm) _wm.value = result.data.Phone;     if (_ph) _ph.value = result.data.Phone;     }
 
         if (statusDiv) {
             statusDiv.innerHTML = `<span style="color:#25d366;display:flex;align-items:center;gap:6px;"><i class='bx bx-check-circle'></i> Loaded: <strong>${result.data.Full_Name || refId}</strong></span>`;
