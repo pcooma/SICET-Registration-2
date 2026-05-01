@@ -2888,7 +2888,7 @@ function refreshWaContextBox() {
     if (ctx.email) rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Email</span><span style="color:var(--text-light);font-size:0.82rem;">${ctx.email}</span></div>`);
     ctx.papers.forEach((p, i) => rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Paper ${i + 1}</span><span style="color:var(--text-light);font-size:0.82rem;">${p}</span></div>`));
 
-    if (!rows.length) { box.style.display = 'none'; return; }
+    if (!rows.length) { box.style.display = 'none'; renderWaPreview(); return; }
 
     box.innerHTML = `
         <div style="padding:10px 14px;background:rgba(74,104,255,0.07);border:1px solid rgba(74,104,255,0.25);border-radius:10px;">
@@ -2898,6 +2898,7 @@ function refreshWaContextBox() {
             <div style="display:flex;flex-direction:column;gap:4px;">${rows.join('')}</div>
         </div>`;
     box.style.display = 'block';
+    renderWaPreview();
 }
 
 function updateWhatsAppContact() {
@@ -2927,6 +2928,8 @@ function updateWhatsAppContact() {
     // Paper ID field: hidden for preconf (workshops cover that), visible for all other categories
     const paperIdGroup = document.getElementById('wa-paper-id-group');
     if (paperIdGroup) paperIdGroup.style.display = (type && type !== 'preconf') ? '' : 'none';
+
+    renderWaPreview();
 }
 
 function renderWhatsAppWorkshops() {
@@ -2939,18 +2942,65 @@ function renderWhatsAppWorkshops() {
     }
     container.innerHTML = sessions.map(s => `
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);">
-            <input type="checkbox" class="wa-workshop-cb" value="${s.name}" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0;">
+            <input type="checkbox" class="wa-workshop-cb" value="${s.name}" onchange="renderWaPreview()" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0;">
             <span style="font-size:0.86rem;color:var(--text-light);">${s.name}</span>
         </label>
     `).join('');
 }
 
-function sendWhatsAppQuery() {
+function buildWaMessage() {
     const name    = (document.getElementById('wa-name')?.value   || '').trim();
     const mobile  = (document.getElementById('wa-mobile')?.value || '').trim();
     const type    = document.getElementById('wa-issue-type')?.value || '';
     const paperId = (document.getElementById('wa-paper-id')?.value || '').trim();
     const issue   = (document.getElementById('wa-issue')?.value   || '').trim();
+    const ctx     = gatherWaContext();
+    const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
+
+    const sel = document.getElementById('wa-issue-type');
+    const issueTypeLabel = (sel && sel.selectedIndex >= 0 && sel.value) ? sel.options[sel.selectedIndex].text : '';
+
+    const selectedWorkshops = type === 'preconf'
+        ? [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value)
+        : [];
+
+    const lines = ['Quarries – SICET 2026', '──────────────────'];
+    if (name)   lines.push(`Name     : ${name}`);
+    if (mobile) lines.push(`Mobile   : ${mobile}`);
+    if (ctx.email) lines.push(`Email    : ${ctx.email}`);
+    if (ctx.refId) lines.push(`Ref ID   : ${ctx.refId}`);
+    ctx.papers.forEach((p, i) => lines.push(`Paper ${i + 1}  : ${p}`));
+    lines.push('──────────────────');
+    if (issueTypeLabel) lines.push(`Query re : ${issueTypeLabel}`);
+    if (selectedWorkshops.length) lines.push(`Workshop : ${selectedWorkshops.join(', ')}`);
+    if (paperId && !ctx.papers.length) lines.push(`Paper ID : ${paperId}`);
+    lines.push('──────────────────');
+    if (issue) lines.push(`Issue    : ${issue}`);
+
+    return { lines, type, contact, name, mobile, issue };
+}
+
+function renderWaPreview() {
+    const box = document.getElementById('wa-preview');
+    if (!box) return;
+    const { lines, contact, type, name, issue } = buildWaMessage();
+    if (!name && !issue) { box.style.display = 'none'; return; }
+    const recipientHtml = type
+        ? `<p style="margin:10px 0 0;font-size:0.8rem;color:var(--text-muted);border-top:1px solid rgba(37,211,102,0.15);padding-top:8px;">Will be sent to: <strong style="color:var(--text-light);">${contact.name}</strong> — ${contact.role}</p>`
+        : '';
+    box.innerHTML = `
+        <div style="padding:12px 16px;background:rgba(37,211,102,0.04);border:1px solid rgba(37,211,102,0.2);border-radius:10px;">
+            <p style="margin:0 0 10px;font-size:0.8rem;color:#25d366;font-weight:600;display:flex;align-items:center;gap:5px;">
+                <i class='bx bx-show'></i> Message Preview
+            </p>
+            <pre style="margin:0;font-family:monospace;font-size:0.8rem;color:var(--text-light);white-space:pre-wrap;word-break:break-word;line-height:1.65;background:rgba(0,0,0,0.2);padding:10px 12px;border-radius:6px;">${lines.join('\n')}</pre>
+            ${recipientHtml}
+        </div>`;
+    box.style.display = 'block';
+}
+
+function sendWhatsAppQuery() {
+    const { lines, contact, name, mobile, issue, type } = buildWaMessage();
 
     if (!name) {
         showToast('Please enter your name.', 'error');
@@ -2972,34 +3022,6 @@ function sendWhatsAppQuery() {
         document.getElementById('wa-issue')?.focus();
         return;
     }
-
-    const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
-    const ctx     = gatherWaContext();
-    const issueTypeLabel = document.getElementById('wa-issue-type').options[document.getElementById('wa-issue-type').selectedIndex].text;
-
-    // Collect selected workshops (only for preconf type)
-    const selectedWorkshops = type === 'preconf'
-        ? [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value)
-        : [];
-
-    const lines = ['Quarries – SICET 2026', '──────────────────'];
-
-    // Sender details
-    lines.push(`Name     : ${name}`);
-    lines.push(`Mobile   : ${mobile}`);
-    if (ctx.email) lines.push(`Email    : ${ctx.email}`);
-    if (ctx.refId) lines.push(`Ref ID   : ${ctx.refId}`);
-    ctx.papers.forEach((p, i) => lines.push(`Paper ${i + 1}  : ${p}`));
-
-    lines.push('──────────────────');
-
-    // Issue classification
-    lines.push(`Query re : ${issueTypeLabel}`);
-    if (selectedWorkshops.length) lines.push(`Workshop : ${selectedWorkshops.join(', ')}`);
-    if (paperId && !ctx.papers.length) lines.push(`Paper ID : ${paperId}`);
-
-    lines.push('──────────────────');
-    lines.push(`Issue    : ${issue}`);
 
     const encoded = encodeURIComponent(lines.join('\n'));
     window.open(`https://wa.me/${contact.number}?text=${encoded}`, '_blank', 'noopener');

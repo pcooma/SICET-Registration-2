@@ -571,11 +571,11 @@
                     <div class="form-group row" style="margin-bottom:12px;">
                         <div class="input-field col">
                             <label for="wa-name" style="font-size:0.85rem;">Your Name <span class="required">*</span></label>
-                            <input type="text" id="wa-name" placeholder="E.g. John Perera" style="font-size:0.88rem;">
+                            <input type="text" id="wa-name" placeholder="E.g. John Perera" style="font-size:0.88rem;" oninput="renderWaPreview()">
                         </div>
                         <div class="input-field col">
                             <label for="wa-mobile" style="font-size:0.85rem;">Your Mobile Number <span class="required">*</span></label>
-                            <input type="tel" id="wa-mobile" placeholder="+94 77 123 4567" style="font-size:0.88rem;">
+                            <input type="tel" id="wa-mobile" placeholder="+94 77 123 4567" style="font-size:0.88rem;" oninput="renderWaPreview()">
                         </div>
                     </div>
                 </div>
@@ -608,14 +608,17 @@
                     <div id="wa-paper-id-group" class="form-group row" style="display:none;margin-bottom:12px;">
                         <div class="input-field col">
                             <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional — if not already in registration above)</span></label>
-                            <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or your paper title" style="font-size:0.88rem;">
+                            <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or your paper title" style="font-size:0.88rem;" oninput="renderWaPreview()">
                         </div>
                     </div>
                     <div class="form-group" style="margin-bottom:14px;">
                         <label for="wa-issue" style="font-size:0.85rem;">Describe your issue or query <span class="required">*</span></label>
-                        <textarea id="wa-issue" rows="3" placeholder="Type your question or issue here…" style="font-size:0.88rem;resize:vertical;"></textarea>
+                        <textarea id="wa-issue" rows="3" placeholder="Type your question or issue here…" style="font-size:0.88rem;resize:vertical;" oninput="renderWaPreview()"></textarea>
                     </div>
                 </div>
+
+                <!-- Message preview -->
+                <div id="wa-preview" style="display:none;margin-bottom:16px;"></div>
 
                 <!-- Send button -->
                 <div>
@@ -979,7 +982,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=50"></script>
+    <script src="app.js?v=51"></script>
 </body>
 
 </html>
