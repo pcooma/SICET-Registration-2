@@ -2857,23 +2857,46 @@ async function pushSettingsToDrive() {
 // ---------------------------------------------------------------------------
 // WhatsApp query sender
 // ---------------------------------------------------------------------------
+const WA_CONTACTS = {
+    preconf: { name: 'Dr. Nandika Miguntanna', number: '94718548966' },
+    other:   { name: 'Dr. Gayashika Fernando',  number: '94777402892' }
+};
+
+function updateWhatsAppContact() {
+    const type    = document.getElementById('wa-issue-type')?.value || 'other';
+    const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
+    const hint    = document.getElementById('wa-contact-hint');
+    const hintTxt = document.getElementById('wa-contact-hint-text');
+    if (hint && hintTxt) {
+        hintTxt.textContent = `Your message will be sent to ${contact.name} (+${contact.number}).`;
+        hint.style.display = 'block';
+    }
+}
+
 function sendWhatsAppQuery() {
+    const type    = document.getElementById('wa-issue-type')?.value || '';
     const paperId = (document.getElementById('wa-paper-id')?.value || '').trim();
     const issue   = (document.getElementById('wa-issue')?.value   || '').trim();
 
+    if (!type) {
+        showToast('Please select the issue category first.', 'error');
+        document.getElementById('wa-issue-type')?.focus();
+        return;
+    }
     if (!issue) {
         showToast('Please describe your issue or query before sending.', 'error');
         document.getElementById('wa-issue')?.focus();
         return;
     }
 
+    const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
     const subject = paperId
         ? `Quarries – SICET 2026 - ${paperId}`
         : 'Quarries – SICET 2026';
 
     const message = `${subject}\nIssue : ${issue}`;
     const encoded = encodeURIComponent(message);
-    window.open(`https://wa.me/94777402892?text=${encoded}`, '_blank', 'noopener');
+    window.open(`https://wa.me/${contact.number}?text=${encoded}`, '_blank', 'noopener');
 }
 
 // Run init

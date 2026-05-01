@@ -563,6 +563,23 @@
                     </div>
                 </div>
 
+                <div class="form-group" style="margin-bottom:12px;">
+                    <label for="wa-issue-type" style="font-size:0.85rem;">What is your query about? <span class="required">*</span></label>
+                    <select id="wa-issue-type" onchange="updateWhatsAppContact()" style="font-size:0.88rem;">
+                        <option value="" disabled selected>Select issue category…</option>
+                        <option value="preconf">Pre-Conference Workshops</option>
+                        <option value="other">Registration &amp; Payment</option>
+                        <option value="other">General Conference Inquiry</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <!-- Routed contact hint -->
+                <div id="wa-contact-hint" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:8px;font-size:0.83rem;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.25);">
+                    <i class='bx bx-user-circle' style="color:#25d366;margin-right:5px;"></i>
+                    <span id="wa-contact-hint-text"></span>
+                </div>
+
                 <div class="form-group row" style="margin-bottom:12px;">
                     <div class="input-field col">
                         <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
@@ -579,7 +596,7 @@
                         style="display:inline-flex;align-items:center;gap:8px;padding:10px 22px;background:linear-gradient(135deg,rgba(37,211,102,0.25),rgba(37,211,102,0.1));border:1px solid rgba(37,211,102,0.5);border-radius:8px;color:#25d366;font-weight:600;font-size:0.92rem;font-family:inherit;cursor:pointer;">
                         <i class='bx bxl-whatsapp' style="font-size:1.15rem;"></i> Send via WhatsApp
                     </button>
-                    <span style="color:var(--text-muted);font-size:0.8rem;">Opens WhatsApp with a pre-filled message to the registration chair.</span>
+                    <span style="color:var(--text-muted);font-size:0.8rem;">Opens WhatsApp with a pre-filled message to the relevant contact.</span>
                 </div>
             </div>
         </section>
@@ -935,7 +952,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=46"></script>
+    <script src="app.js?v=47"></script>
 </body>
 
 </html>
