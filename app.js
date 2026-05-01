@@ -2858,28 +2858,77 @@ async function pushSettingsToDrive() {
 // WhatsApp query sender
 // ---------------------------------------------------------------------------
 const WA_CONTACTS = {
-    preconf: { name: 'Dr. Nandika Miguntanna', number: '94718548966' },
-    other:   { name: 'Dr. Gayashika Fernando',  number: '94777402892' }
+    preconf: { name: 'Dr. Nandika Miguntanna', number: '94718548966', role: 'Pre-Conference Workshops Coordinator' },
+    payment: { name: 'Dr. Gayashika Fernando',  number: '94777402892', role: 'Registration Chair' },
+    general: { name: 'Mr. Sudara Withana',       number: '94774014463', role: 'Conference Coordinator' },
+    other:   { name: 'Dr. Gayashika Fernando',  number: '94777402892', role: 'Registration Chair' }
 };
 
 function updateWhatsAppContact() {
-    const type    = document.getElementById('wa-issue-type')?.value || 'other';
+    // Auto-fill from main registration form if the user already entered their details
+    const waName   = document.getElementById('wa-name');
+    const waMobile = document.getElementById('wa-mobile');
+    if (waName   && !waName.value)   waName.value   = document.getElementById('fullName')?.value || '';
+    if (waMobile && !waMobile.value) waMobile.value = document.getElementById('phone')?.value    || '';
+
+    const type    = document.getElementById('wa-issue-type')?.value || '';
     const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
+
+    // Show/hide workshop selector
+    const workshopsSection = document.getElementById('wa-workshops-section');
+    if (workshopsSection) {
+        if (type === 'preconf') {
+            renderWhatsAppWorkshops();
+            workshopsSection.style.display = 'block';
+        } else {
+            workshopsSection.style.display = 'none';
+        }
+    }
+
+    // Update contact hint
     const hint    = document.getElementById('wa-contact-hint');
     const hintTxt = document.getElementById('wa-contact-hint-text');
-    if (hint && hintTxt) {
-        hintTxt.textContent = `Your message will be sent to ${contact.name} (+${contact.number}).`;
+    if (hint && hintTxt && type) {
+        hintTxt.innerHTML = `Your message will be sent to <strong>${contact.name}</strong> — ${contact.role}.`;
         hint.style.display = 'block';
     }
 }
 
+function renderWhatsAppWorkshops() {
+    const container = document.getElementById('wa-workshops-list');
+    if (!container) return;
+    const sessions = appSettings.pre_conference_sessions || [];
+    if (!sessions.length) {
+        container.innerHTML = '<p style="color:var(--text-muted);font-size:0.83rem;margin:0;">No workshops configured yet.</p>';
+        return;
+    }
+    container.innerHTML = sessions.map(s => `
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);">
+            <input type="checkbox" class="wa-workshop-cb" value="${s.name}" style="accent-color:var(--accent);width:15px;height:15px;flex-shrink:0;">
+            <span style="font-size:0.86rem;color:var(--text-light);">${s.name}</span>
+        </label>
+    `).join('');
+}
+
 function sendWhatsAppQuery() {
+    const name    = (document.getElementById('wa-name')?.value   || '').trim();
+    const mobile  = (document.getElementById('wa-mobile')?.value || '').trim();
     const type    = document.getElementById('wa-issue-type')?.value || '';
     const paperId = (document.getElementById('wa-paper-id')?.value || '').trim();
     const issue   = (document.getElementById('wa-issue')?.value   || '').trim();
 
+    if (!name) {
+        showToast('Please enter your name.', 'error');
+        document.getElementById('wa-name')?.focus();
+        return;
+    }
+    if (!mobile) {
+        showToast('Please enter your mobile number.', 'error');
+        document.getElementById('wa-mobile')?.focus();
+        return;
+    }
     if (!type) {
-        showToast('Please select the issue category first.', 'error');
+        showToast('Please select the issue category.', 'error');
         document.getElementById('wa-issue-type')?.focus();
         return;
     }
@@ -2890,12 +2939,27 @@ function sendWhatsAppQuery() {
     }
 
     const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
-    const subject = paperId
-        ? `Quarries – SICET 2026 - ${paperId}`
-        : 'Quarries – SICET 2026';
 
-    const message = `${subject}\nIssue : ${issue}`;
-    const encoded = encodeURIComponent(message);
+    // Collect selected workshops (only for preconf type)
+    let workshopLine = '';
+    if (type === 'preconf') {
+        const checked = [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value);
+        if (checked.length) workshopLine = `\nWorkshop(s) : ${checked.join(', ')}`;
+    }
+
+    const lines = [
+        'Quarries – SICET 2026',
+        '──────────────────',
+        `Name    : ${name}`,
+        `Mobile  : ${mobile}`,
+        paperId ? `Paper ID : ${paperId}` : null,
+        `Category : ${document.getElementById('wa-issue-type').options[document.getElementById('wa-issue-type').selectedIndex].text}`,
+        workshopLine || null,
+        '──────────────────',
+        `Issue   : ${issue}`
+    ].filter(l => l !== null).join('\n');
+
+    const encoded = encodeURIComponent(lines);
     window.open(`https://wa.me/${contact.number}?text=${encoded}`, '_blank', 'noopener');
 }
 

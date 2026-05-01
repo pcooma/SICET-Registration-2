@@ -553,51 +553,84 @@
             </div>
             <!-- WhatsApp Contact / Query Box -->
             <div class="form-wrapper glass-panel" style="margin-top:20px;">
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-                    <div style="width:42px;height:42px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.35);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <i class='bx bxl-whatsapp' style="font-size:1.5rem;color:#25d366;"></i>
+
+                <!-- Header -->
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.07);">
+                    <div style="width:46px;height:46px;background:rgba(37,211,102,0.13);border:1px solid rgba(37,211,102,0.35);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class='bx bxl-whatsapp' style="font-size:1.6rem;color:#25d366;"></i>
                     </div>
                     <div>
-                        <h3 style="margin:0;font-size:1rem;color:var(--text-light);font-weight:600;">Contact Registration Chair</h3>
-                        <p style="margin:0;font-size:0.82rem;color:var(--text-muted);">For queries, email <a href="mailto:gayashika.f@sliit.lk" style="color:var(--accent);">gayashika.f@sliit.lk</a> or send a WhatsApp message below.</p>
+                        <h3 style="margin:0 0 3px;font-size:1.05rem;color:var(--text-light);font-weight:700;">Have a Query? Contact Us</h3>
+                        <p style="margin:0;font-size:0.82rem;color:var(--text-muted);">Fill in the details below and we will route your message to the right person via WhatsApp.</p>
                     </div>
                 </div>
 
-                <div class="form-group" style="margin-bottom:12px;">
-                    <label for="wa-issue-type" style="font-size:0.85rem;">What is your query about? <span class="required">*</span></label>
-                    <select id="wa-issue-type" onchange="updateWhatsAppContact()" style="font-size:0.88rem;">
-                        <option value="" disabled selected>Select issue category…</option>
-                        <option value="preconf">Pre-Conference Workshops</option>
-                        <option value="other">Registration &amp; Payment</option>
-                        <option value="other">General Conference Inquiry</option>
-                        <option value="other">Other</option>
-                    </select>
+                <!-- Step 1: Your details -->
+                <div style="margin-bottom:6px;">
+                    <p style="margin:0 0 10px;font-size:0.8rem;font-weight:600;color:var(--accent);letter-spacing:0.5px;text-transform:uppercase;">Your Contact Details</p>
+                    <div class="form-group row" style="margin-bottom:12px;">
+                        <div class="input-field col">
+                            <label for="wa-name" style="font-size:0.85rem;">Your Name <span class="required">*</span></label>
+                            <input type="text" id="wa-name" placeholder="E.g. John Perera" style="font-size:0.88rem;">
+                        </div>
+                        <div class="input-field col">
+                            <label for="wa-mobile" style="font-size:0.85rem;">Your Mobile Number <span class="required">*</span></label>
+                            <input type="tel" id="wa-mobile" placeholder="+94 77 123 4567" style="font-size:0.88rem;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Issue category -->
+                <div style="margin-bottom:6px;">
+                    <p style="margin:0 0 10px;font-size:0.8rem;font-weight:600;color:var(--accent);letter-spacing:0.5px;text-transform:uppercase;">Issue Details</p>
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label for="wa-issue-type" style="font-size:0.85rem;">What is your query about? <span class="required">*</span></label>
+                        <select id="wa-issue-type" onchange="updateWhatsAppContact()" style="font-size:0.88rem;">
+                            <option value="" disabled selected>Select issue category…</option>
+                            <option value="preconf">Pre-Conference Workshops</option>
+                            <option value="payment">Registration &amp; Payment</option>
+                            <option value="general">General Conference Inquiry</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- Workshop selector — shown only when Pre-Conference Workshops is selected -->
+                    <div id="wa-workshops-section" style="display:none;margin-bottom:12px;padding:12px 14px;background:rgba(197,215,58,0.05);border:1px solid rgba(197,215,58,0.2);border-radius:10px;">
+                        <p style="margin:0 0 10px;font-size:0.84rem;color:var(--text-light);font-weight:600;"><i class='bx bx-notepad' style="color:var(--accent);margin-right:5px;"></i>Which workshop(s) is your query about?</p>
+                        <div id="wa-workshops-list" style="display:flex;flex-direction:column;gap:8px;">
+                            <!-- Populated by JS from appSettings.pre_conference_sessions -->
+                        </div>
+                    </div>
+
+                    <div class="form-group row" style="margin-bottom:12px;">
+                        <div class="input-field col">
+                            <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                            <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or your paper title" style="font-size:0.88rem;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:14px;">
+                        <label for="wa-issue" style="font-size:0.85rem;">Describe your issue or query <span class="required">*</span></label>
+                        <textarea id="wa-issue" rows="3" placeholder="Type your question or issue here…" style="font-size:0.88rem;resize:vertical;"></textarea>
+                    </div>
                 </div>
 
                 <!-- Routed contact hint -->
-                <div id="wa-contact-hint" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:8px;font-size:0.83rem;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.25);">
-                    <i class='bx bx-user-circle' style="color:#25d366;margin-right:5px;"></i>
-                    <span id="wa-contact-hint-text"></span>
-                </div>
-
-                <div class="form-group row" style="margin-bottom:12px;">
-                    <div class="input-field col">
-                        <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-                        <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or paper title" style="font-size:0.88rem;">
+                <div id="wa-contact-hint" style="display:none;margin-bottom:16px;padding:10px 14px;border-radius:10px;font-size:0.84rem;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.25);">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <i class='bx bx-user-circle' style="color:#25d366;font-size:1.2rem;flex-shrink:0;"></i>
+                        <span id="wa-contact-hint-text" style="color:var(--text-light);"></span>
                     </div>
                 </div>
-                <div class="form-group" style="margin-bottom:14px;">
-                    <label for="wa-issue" style="font-size:0.85rem;">Describe your issue or query <span class="required">*</span></label>
-                    <textarea id="wa-issue" rows="3" placeholder="Type your question or issue here…" style="font-size:0.88rem;resize:vertical;"></textarea>
+
+                <!-- Send button -->
+                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                    <button type="button" id="btn-send-whatsapp" onclick="sendWhatsAppQuery()"
+                        style="display:inline-flex;align-items:center;gap:8px;padding:11px 26px;background:linear-gradient(135deg,rgba(37,211,102,0.25),rgba(37,211,102,0.1));border:1px solid rgba(37,211,102,0.5);border-radius:8px;color:#25d366;font-weight:700;font-size:0.95rem;font-family:inherit;cursor:pointer;">
+                        <i class='bx bxl-whatsapp' style="font-size:1.2rem;"></i> Send via WhatsApp
+                    </button>
+                    <span style="color:var(--text-muted);font-size:0.8rem;line-height:1.5;">Your message will be routed to the<br>appropriate SICET 2026 coordinator.</span>
                 </div>
 
-                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                    <button type="button" id="btn-send-whatsapp" onclick="sendWhatsAppQuery()"
-                        style="display:inline-flex;align-items:center;gap:8px;padding:10px 22px;background:linear-gradient(135deg,rgba(37,211,102,0.25),rgba(37,211,102,0.1));border:1px solid rgba(37,211,102,0.5);border-radius:8px;color:#25d366;font-weight:600;font-size:0.92rem;font-family:inherit;cursor:pointer;">
-                        <i class='bx bxl-whatsapp' style="font-size:1.15rem;"></i> Send via WhatsApp
-                    </button>
-                    <span style="color:var(--text-muted);font-size:0.8rem;">Opens WhatsApp with a pre-filled message to the relevant contact.</span>
-                </div>
             </div>
         </section>
 
@@ -952,7 +985,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=47"></script>
+    <script src="app.js?v=48"></script>
 </body>
 
 </html>
