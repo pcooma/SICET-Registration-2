@@ -2858,10 +2858,11 @@ async function pushSettingsToDrive() {
 // WhatsApp query sender
 // ---------------------------------------------------------------------------
 const WA_CONTACTS = {
-    preconf: { name: 'Dr. Nandika Miguntanna', number: '94718548966', role: 'Pre-Conference Workshops Coordinator' },
-    payment: { name: 'Dr. Gayashika Fernando',  number: '94777402892', role: 'Registration Chair' },
-    general: { name: 'Mr. Sudara Withana',       number: '94774014463', role: 'Conference Coordinator' },
-    other:   { name: 'Dr. Gayashika Fernando',  number: '94777402892', role: 'Registration Chair' }
+    preconf: { name: 'Dr. Nandika Miguntanna',      number: '94718548966', role: 'Pre-Conference Workshops Coordinator' },
+    award:   { name: 'Ms. Angel Shanali Oshaji',    number: '94760255850', role: 'Excellence Award Coordinator' },
+    payment: { name: 'Dr. Gayashika Fernando',      number: '94777402892', role: 'Registration Chair' },
+    general: { name: 'Mr. Sudara Withana',          number: '94774014463', role: 'Conference Coordinator' },
+    other:   { name: 'Dr. Gayashika Fernando',      number: '94777402892', role: 'Registration Chair' }
 };
 
 function gatherWaContext() {
@@ -2925,9 +2926,20 @@ function updateWhatsAppContact() {
         }
     }
 
-    // Paper ID field: hidden for preconf (workshops cover that), visible for all other categories
+    // Show/hide award category selector
+    const awardSection = document.getElementById('wa-award-section');
+    if (awardSection) {
+        if (type === 'award') {
+            renderWaAwardCategory();
+            awardSection.style.display = 'block';
+        } else {
+            awardSection.style.display = 'none';
+        }
+    }
+
+    // Paper ID field: only relevant for payment / general / other
     const paperIdGroup = document.getElementById('wa-paper-id-group');
-    if (paperIdGroup) paperIdGroup.style.display = (type && type !== 'preconf') ? '' : 'none';
+    if (paperIdGroup) paperIdGroup.style.display = (type && type !== 'preconf' && type !== 'award') ? '' : 'none';
 
     renderWaPreview();
 }
@@ -2948,6 +2960,19 @@ function renderWhatsAppWorkshops() {
     `).join('');
 }
 
+function renderWaAwardCategory() {
+    const sel = document.getElementById('wa-award-category');
+    if (!sel) return;
+    const cats = appSettings.award_categories || [];
+    const current = sel.value;
+    if (!cats.length) {
+        sel.innerHTML = '<option value="">No award categories configured</option>';
+        return;
+    }
+    sel.innerHTML = '<option value="">Select award category…</option>' +
+        cats.map(c => `<option value="${c}"${c === current ? ' selected' : ''}>${c}</option>`).join('');
+}
+
 function buildWaMessage() {
     const name    = (document.getElementById('wa-name')?.value   || '').trim();
     const mobile  = (document.getElementById('wa-mobile')?.value || '').trim();
@@ -2963,6 +2988,9 @@ function buildWaMessage() {
     const selectedWorkshops = type === 'preconf'
         ? [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value)
         : [];
+    const awardCategory = type === 'award'
+        ? (document.getElementById('wa-award-category')?.value || '').trim()
+        : '';
 
     const lines = ['Quarries – SICET 2026', '──────────────────'];
     if (name)   lines.push(`Name     : ${name}`);
@@ -2973,6 +3001,7 @@ function buildWaMessage() {
     lines.push('──────────────────');
     if (issueTypeLabel) lines.push(`Query re : ${issueTypeLabel}`);
     if (selectedWorkshops.length) lines.push(`Workshop : ${selectedWorkshops.join(', ')}`);
+    if (awardCategory) lines.push(`Category : ${awardCategory}`);
     if (paperId && !ctx.papers.length) lines.push(`Paper ID : ${paperId}`);
     lines.push('──────────────────');
     if (issue) lines.push(`Issue    : ${issue}`);

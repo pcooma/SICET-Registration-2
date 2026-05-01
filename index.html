@@ -591,6 +591,7 @@
                         <select id="wa-issue-type" onchange="updateWhatsAppContact()" style="font-size:0.88rem;">
                             <option value="" disabled selected>Select issue category…</option>
                             <option value="preconf">Pre-Conference Workshops</option>
+                            <option value="award">Excellence Award</option>
                             <option value="payment">Registration &amp; Payment</option>
                             <option value="general">General Conference Inquiry</option>
                             <option value="other">Other</option>
@@ -603,6 +604,14 @@
                         <div id="wa-workshops-list" style="display:flex;flex-direction:column;gap:8px;">
                             <!-- Populated by JS from appSettings.pre_conference_sessions -->
                         </div>
+                    </div>
+
+                    <!-- Award category selector — shown only when Excellence Award is selected -->
+                    <div id="wa-award-section" style="display:none;margin-bottom:12px;padding:12px 14px;background:rgba(197,215,58,0.05);border:1px solid rgba(197,215,58,0.2);border-radius:10px;">
+                        <p style="margin:0 0 10px;font-size:0.84rem;color:var(--text-light);font-weight:600;"><i class='bx bx-award' style="color:var(--accent);margin-right:5px;"></i>Which award category is your query about?</p>
+                        <select id="wa-award-category" onchange="renderWaPreview()" style="font-size:0.88rem;">
+                            <!-- Populated by JS from appSettings.award_categories -->
+                        </select>
                     </div>
 
                     <div id="wa-paper-id-group" class="form-group row" style="display:none;margin-bottom:12px;">
@@ -982,7 +991,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=51"></script>
+    <script src="app.js?v=52"></script>
 </body>
 
 </html>
