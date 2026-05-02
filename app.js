@@ -96,6 +96,7 @@ let pendingAdminView = 'settings';
 let appSettings = JSON.parse(JSON.stringify(defaultSettings)); // resolved properly in resolveSettings()
 let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
 let paymentProofFiles = []; // Managed array for multi-file proof of payment upload
+let paymentProofPreviouslyUploaded = false; // true when loaded record already has proof on server
 
 // Initialize
 async function init() {
@@ -297,6 +298,7 @@ function setupEventListeners() {
     document.getElementById('paymentProof').addEventListener('change', (e) => {
         const incoming = Array.from(e.target.files);
         e.target.value = ''; // reset so same file can be re-selected after removal
+        if (incoming.length) paymentProofPreviouslyUploaded = false;
         for (const file of incoming) {
             if (file.size > 5 * 1024 * 1024) {
                 showToast(`"${file.name}" exceeds 5MB — skipped.`, 'error');
@@ -1192,8 +1194,8 @@ function populateFormFromData(data) {
     }
     if (data.Payment_Proof_Base64 === '(uploaded — see folder)') {
         paymentProofFiles = [];
+        paymentProofPreviouslyUploaded = true;
         updatePaymentProofUI();
-        showUploadedStatus('paymentProof', 'Payment proof previously uploaded');
     }
 
     // Make loaded registration data available to the WhatsApp widget paper picker.
@@ -1247,6 +1249,7 @@ async function handleFormSubmit(e) {
     clearDraft();
     registrationForm.reset();
     paymentProofFiles = [];
+    paymentProofPreviouslyUploaded = false;
     updatePaymentProofUI();
     document.querySelectorAll('.section-toggle').forEach(t => t.dispatchEvent(new Event('change')));
     const refEl = document.getElementById('reg-ref-id');
@@ -2509,7 +2512,21 @@ function updatePaymentProofUI() {
         area.className = 'proof-preview-list';
         input.insertAdjacentElement('afterend', area);
     }
-    if (!paymentProofFiles.length) { area.innerHTML = ''; updateSubmitButtonState(); return; }
+    if (!paymentProofFiles.length) {
+        if (paymentProofPreviouslyUploaded) {
+            area.innerHTML = `<div class="proof-preview-item proof-preview-item--uploaded">
+                <div class="proof-uploaded-icon"><i class='bx bx-check-circle'></i></div>
+                <div class="proof-info">
+                    <span class="proof-name">Previously uploaded</span>
+                    <span class="proof-size">On file — upload a new file below to replace</span>
+                </div>
+            </div>`;
+        } else {
+            area.innerHTML = '';
+        }
+        updateSubmitButtonState();
+        return;
+    }
 
     area.innerHTML = paymentProofFiles.map((file, i) => {
         const isImg = file.type.startsWith('image/');
@@ -2632,7 +2649,7 @@ async function loadFromGoogleDrive() {
 function updateSubmitButtonState() {
     const submitBtn = document.getElementById('btn-submit');
     const submitNote = document.getElementById('submit-payment-note');
-    const hasProof = paymentProofFiles.length > 0;
+    const hasProof = paymentProofFiles.length > 0 || paymentProofPreviouslyUploaded;
 
     if (hasProof) {
         submitBtn.classList.remove('btn-blocked');

@@ -1338,3 +1338,21 @@ input[type="file"]::file-selector-button:hover {
     align-items: center;
     gap: 3px;
 }
+
+/* Previously-uploaded placeholder card */
+.proof-preview-item--uploaded {
+    border-color: rgba(37,211,102,0.35);
+    background: rgba(37,211,102,0.06);
+}
+.proof-uploaded-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(37,211,102,0.12);
+    border-radius: 6px;
+    flex-shrink: 0;
+    font-size: 1.6rem;
+    color: #25d366;
+}
