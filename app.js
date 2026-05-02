@@ -184,9 +184,10 @@ function setupEventListeners() {
     document.getElementById('numberOfPapers').addEventListener('input', (e) => {
         let val = parseInt(e.target.value) || 1;
         if (val < 1) val = 1;
-        if (val > 10) val = 10; // Maximum 10 papers
+        if (val > 10) val = 10;
+        e.target.value = val; // keep DOM in sync with clamped value
 
-        generatePaperBlocks(val); // Generate dynamic blocks
+        generatePaperBlocks(val);
 
         const hint = document.querySelector('.discount-hint');
         const cat = document.getElementById('attendeeCategory').value;
@@ -1186,6 +1187,7 @@ function populateFormFromData(data) {
     // Without this, gatherWaContext() falls back to reading DOM fields which may not yet
     // be visible (paper section hidden) at the time the user selects an issue type.
     waLoadedData = data;
+    waDataSource = 'form';
 
     // Refresh WhatsApp context box and preview so it reflects the loaded registration data
     refreshWaContextBox();
@@ -1236,6 +1238,9 @@ async function handleFormSubmit(e) {
     const refEl = document.getElementById('reg-ref-id');
     if (refEl) refEl.textContent = '—';
     document.getElementById('step2-section')?.classList.add('hidden');
+    waLoadedData = null;
+    waDataSource = null;
+    refreshWaContextBox();
 
     showToast(`Registration complete! Reference: ${refId}`, 'success');
 }
@@ -1277,6 +1282,14 @@ function generateInvoice() {
     }
 
     const billToType = document.querySelector('input[name="Bill_To"]:checked')?.value || 'Personal';
+    if (billToType === 'Organization') {
+        const _addr = (document.getElementById('orgBillingAddress')?.value || '').trim();
+        if (!_addr) {
+            showToast('Please enter the Organization Billing Address before downloading the invoice.', 'error');
+            document.getElementById('orgBillingAddress')?.focus();
+            return;
+        }
+    }
     const orgLegalName = document.getElementById('orgLegalName').value || org;
     const orgBillingAddress = document.getElementById('orgBillingAddress').value || '';
     const orgTaxId = document.getElementById('orgTaxId').value || '';
@@ -1931,8 +1944,7 @@ function renderOverviewTab() {
     const sessionCounts = {};
     (appSettings.pre_conference_sessions || []).forEach(sess => {
         submissions.forEach(sub => {
-            const info = JSON.stringify(sub);
-            if (info.includes(sess.name)) {
+            if ((sub.PreConf_Sessions || '').includes(sess.name)) {
                 sessionCounts[sess.name] = (sessionCounts[sess.name] || 0) + 1;
             }
         });
@@ -1980,7 +1992,12 @@ function renderLogisticsTab() {
     set('dash-excursion-breakdown', excHtml || '<p style="color:var(--text-muted);font-size:0.85rem;">No excursion registrations.</p>');
 
     // Inauguration
-    const inaugYes = submissions.filter(s => s.Include_Inauguration === true || s.Include_Inauguration === 'true' || s.Include_Inauguration === 'Yes').length;
+    const inaugYes = submissions.filter(s =>
+        s.Include_Inauguration === true   ||
+        s.Include_Inauguration === 'true' ||
+        s.Include_Inauguration === 'on'   ||
+        s.Include_Inauguration === 'Yes'
+    ).length;
     const inaugNo  = submissions.length - inaugYes;
     set('dash-inauguration-breakdown',
         logRow('Opted In', inaugYes) +
@@ -2152,9 +2169,10 @@ function openRecordModal(sub) {
         {
             title: 'Academic / Papers',
             fields: [
-                ['Number of Papers',   sub.Number_of_Papers],
-                ['Food Preference',    sub.Food_Preference],
-                ['Include Inauguration', sub.Include_Inauguration],
+                ['Number of Papers',    sub.Number_of_Papers],
+                ['Pre-Conf Sessions',   sub.PreConf_Sessions],
+                ['Food Preference',     sub.Food_Preference],
+                ['Include Inauguration',sub.Include_Inauguration],
             ]
         },
         {
@@ -2162,6 +2180,7 @@ function openRecordModal(sub) {
             fields: [
                 ['Company / Org Name', sub.Company_Name],
                 ['Participant Count',  sub.Participant_Count],
+                ['Participant Names',  sub.Participant_Names],
                 ['Award Category',     sub.Award_Category],
             ]
         },
@@ -2353,6 +2372,10 @@ function saveSettings(e) {
     // Regenerate paper blocks so Paper ID visibility reflects the current APC collection state
     generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
     updateCostPreviews();
+    // Keep WhatsApp widget dropdowns in sync if they are currently visible
+    const _waIssueType = document.getElementById('wa-issue-type')?.value;
+    if (_waIssueType === 'award')   renderWaAwardCategory();
+    if (_waIssueType === 'preconf') renderWhatsAppWorkshops();
     showToast('Saving to Google Drive…', 'success');
 
     // Persist to Google Drive and confirm
@@ -2999,7 +3022,8 @@ async function pushSettingsToDrive() {
 // ---------------------------------------------------------------------------
 // WhatsApp query sender
 // ---------------------------------------------------------------------------
-let waLoadedData = null; // set by loadWaRegistration()
+let waLoadedData       = null;  // set by loadWaRegistration() or populateFormFromData()
+let waDataSource       = null;  // 'widget' | 'form' — tracks who last set waLoadedData
 
 const WA_CONTACTS = {
     preconf: { name: 'Dr. Nandika Miguntanna',      number: '94718548966', role: 'Pre-Conference Workshops Chair' },
@@ -3064,6 +3088,7 @@ async function loadWaRegistration() {
         }
 
         waLoadedData = result.data;
+        waDataSource = 'widget';
 
         // Fill widget fields and main form fields unconditionally
         const _wn = document.getElementById('wa-name');
@@ -3091,7 +3116,13 @@ async function loadWaRegistration() {
 function onWaRefInput() {
     const val = (document.getElementById('wa-ref-lookup')?.value || '').trim();
     if (!val) {
-        waLoadedData = null;
+        // Only clear waLoadedData if it was loaded via the widget itself.
+        // If it was set by the main-form ref lookup, keep it so the paper picker
+        // (and context box) continue to show the correct registration data.
+        if (waDataSource === 'widget') {
+            waLoadedData = null;
+            waDataSource = null;
+        }
         const statusDiv = document.getElementById('wa-ref-status');
         if (statusDiv) statusDiv.style.display = 'none';
         refreshWaContextBox();
@@ -3324,6 +3355,11 @@ function sendWhatsAppQuery() {
     }
     if (!mobile) {
         showToast('Please enter your mobile number.', 'error');
+        document.getElementById('wa-mobile')?.focus();
+        return;
+    }
+    if (!mobile.startsWith('+')) {
+        showToast('Mobile number must include country code (e.g. +94 77 123 4567).', 'error');
         document.getElementById('wa-mobile')?.focus();
         return;
     }
