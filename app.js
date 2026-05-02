@@ -1182,6 +1182,11 @@ function populateFormFromData(data) {
         showUploadedStatus('paymentProof', 'Payment proof previously uploaded');
     }
 
+    // Make loaded registration data available to the WhatsApp widget paper picker.
+    // Without this, gatherWaContext() falls back to reading DOM fields which may not yet
+    // be visible (paper section hidden) at the time the user selects an issue type.
+    waLoadedData = data;
+
     // Refresh WhatsApp context box and preview so it reflects the loaded registration data
     refreshWaContextBox();
     renderWaPreview();
@@ -3005,7 +3010,7 @@ const WA_CONTACTS = {
 };
 
 function gatherWaContext() {
-    // If a registration was loaded via the widget's ref ID lookup, prefer that data
+    // If a registration was loaded (via widget lookup or main form lookup), prefer that data
     if (waLoadedData) {
         const refId   = (waLoadedData.Invoice_ID || '').trim();
         const email   = (waLoadedData.Email       || '').trim();
@@ -3014,7 +3019,7 @@ function gatherWaContext() {
         for (let i = 1; i <= nPapers; i++) {
             const pid   = (waLoadedData[`Paper_${i}_ID`]    || '').trim();
             const title = (waLoadedData[`Paper_${i}_Title`] || '').trim();
-            if (title) papers.push(pid ? `[${pid}] ${title}` : title);
+            if (pid || title) papers.push(pid && title ? `[${pid}] ${title}` : (title || pid));
         }
         return { refId, email, papers };
     }
@@ -3027,7 +3032,7 @@ function gatherWaContext() {
     for (let i = 1; i <= nPapers; i++) {
         const pid   = (document.getElementById(`paperId_${i}`)?.value    || '').trim();
         const title = (document.getElementById(`paperTitle_${i}`)?.value || '').trim();
-        if (title) papers.push(pid ? `[${pid}] ${title}` : title);
+        if (pid || title) papers.push(pid && title ? `[${pid}] ${title}` : (title || pid));
     }
     return { refId: refId !== '—' ? refId : '', email, papers };
 }
@@ -3168,7 +3173,7 @@ function updateWhatsAppContact() {
     if (paperSection) {
         if (type === 'payment' || type === 'general') {
             renderWaPaperPicker();
-            paperSection.style.display = '';
+            paperSection.style.display = 'block';
         } else {
             paperSection.style.display = 'none';
         }
