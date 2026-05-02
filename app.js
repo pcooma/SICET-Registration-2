@@ -541,14 +541,18 @@ function updateExcursionTicketVisibility() {
     const localGroup   = document.getElementById('excursion-local-ticket-group');
     const foreignGroup = document.getElementById('excursion-foreign-ticket-group');
     if (localGroup && foreignGroup) {
+        // Show the ticket type matching the attendee's region; both can coexist for groups.
+        // Do NOT zero out the counts — the user may have already entered them.
         if (isLocal) {
             localGroup.classList.remove('hidden');
             foreignGroup.classList.add('hidden');
-            document.getElementById('excursionForeignCount').value = 0;
-        } else {
+        } else if (region) {
             foreignGroup.classList.remove('hidden');
             localGroup.classList.add('hidden');
-            document.getElementById('excursionLocalCount').value = 0;
+        } else {
+            // No region set yet — show both groups so the user can pick
+            localGroup.classList.remove('hidden');
+            foreignGroup.classList.remove('hidden');
         }
     }
 
@@ -634,13 +638,13 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
             <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${awUSD}</td>
         </tr>
         <tr style="${rb}">
-            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Local ticket</td>
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion — Local Participant Ticket</td>
             <td style="text-align:right;padding:5px 4px;color:var(--accent);">${exclLoc.toLocaleString('en-US')}</td>
             <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${elUSD}</td>
             <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${elUSD}</td>
         </tr>
         <tr style="${rb}">
-            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion – Foreign ticket</td>
+            <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion — International Participant Ticket</td>
             <td style="text-align:right;padding:5px 4px;color:var(--accent);">${exclFor.toLocaleString('en-US')}</td>
             <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${efUSD}</td>
             <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${efUSD}</td>
@@ -710,15 +714,15 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
             <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(awdFee, 'LKR')?.toLocaleString('en-US')}</td>
         </tr>`;
 
-        // Excursion: show only the ticket type relevant to the attendee's region
+        // Excursion: show the ticket type relevant to the attendee's region
         if (isLocal) {
             rows += `<tr style="${rb}">
-                <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion ticket</td>
+                <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion — Local Participant Ticket</td>
                 <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclLoc, 'LKR')?.toLocaleString('en-US')}</td>
             </tr>`;
         } else {
             rows += `<tr style="${rb}">
-                <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion ticket</td>
+                <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion — International Participant Ticket</td>
                 <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclFor, 'LKR')?.toLocaleString('en-US')}</td>
             </tr>`;
         }
@@ -846,8 +850,10 @@ function calculateTotalFee() {
 
     const region = document.getElementById('attendeeRegion').value;
     const isLocalRegion = region === 'Local';
+    // When region is not yet selected treat fees as LKR (the native conference currency)
+    const effectivelyLocal = !region || isLocalRegion;
     const fxRate = appSettings.usd_to_lkr || 320;
-    const displayCur = isLocalRegion ? 'LKR' : 'USD';
+    const displayCur = effectivelyLocal ? 'LKR' : 'USD';
 
     // Convert any amount from its native currency to the display currency
     const toDisplay = (amount, fromCur) => {
@@ -886,21 +892,22 @@ function calculateTotalFee() {
             } else {
                 const hasPaperDiscount = catDef?.paper_discount || false;
                 const maxP = appSettings.discounts.discount_max_papers || 0;
-                const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
+                // discPapers: number of papers (2nd onwards) that receive the discount
+                const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP) : papers - 1) : 0;
                 const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
                 const disc       = (appSettings.discounts.student_from_2nd || 0) / 100;
 
                 let confTotal;
                 if (papers === 1) {
                     confTotal = baseFee;
-                    br(); breakdownText += `<span>Conference Fee:</span><span>${confTotal} ${nativeCur}</span>`;
+                    br(); breakdownText += `<span>Conference Registration:</span><span>${toDisplay(confTotal, nativeCur).toLocaleString('en-US')} ${displayCur}</span>`;
                 } else if (hasPaperDiscount && disc > 0) {
                     const discFee = baseFee * (1 - disc);
                     confTotal = baseFee + (discFee * discPapers) + (baseFee * fullExtra);
-                    br(); breakdownText += `<span>Conf (1st: ${baseFee} | ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? ` | ${fullExtra} × ${baseFee} full` : ''}):</span><span>${confTotal.toFixed(2)} ${nativeCur}</span>`;
+                    br(); breakdownText += `<span>Conference Registration (1st paper: ${baseFee} ${nativeCur}; ${discPapers} × ${discFee.toFixed(0)} @ ${appSettings.discounts.student_from_2nd}% off${fullExtra > 0 ? `; ${fullExtra} × ${baseFee} full` : ''}):</span><span>${toDisplay(confTotal, nativeCur).toLocaleString('en-US')} ${displayCur}</span>`;
                 } else {
                     confTotal = baseFee * papers;
-                    br(); breakdownText += `<span>Conf (${papers} Papers):</span><span>${confTotal} ${nativeCur}</span>`;
+                    br(); breakdownText += `<span>Conference Registration (${papers} papers × ${baseFee} ${nativeCur}):</span><span>${toDisplay(confTotal, nativeCur).toLocaleString('en-US')} ${displayCur}</span>`;
                 }
                 displayTotal += toDisplay(confTotal, nativeCur);
             }
@@ -921,32 +928,34 @@ function calculateTotalFee() {
 
     }
 
-    // Inauguration opt-in — student opt-in, available regardless of registration type
+    // Inauguration opt-in — only added when Main Conference is also active
     const inaugCheck = document.getElementById('includeInauguration');
-    if (inaugCheck?.checked) {
-        const inaugFee = isLocalRegion ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
-        const inaugCur = isLocalRegion ? 'LKR' : 'USD';
+    if (isMain && inaugCheck?.checked) {
+        const inaugFee = effectivelyLocal ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
+        const inaugCur = effectivelyLocal ? 'LKR' : 'USD';
         if (inaugFee > 0) {
             const disp = toDisplay(inaugFee, inaugCur);
             displayTotal += disp;
-            br(); breakdownText += `<span>Inauguration Ceremony:</span><span>${disp} ${displayCur}</span>`;
+            br(); breakdownText += `<span>Inauguration Ceremony:</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
         }
     }
 
-    // Pre-conference sessions — standalone or as add-on
-    document.querySelectorAll('.preconf-session-check').forEach(chk => {
-        if (chk.checked) {
-            const sessId = chk.dataset.sessId;
-            const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === sessId);
-            if (sess) {
-                const rawFee = isLocalRegion ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
-                const nativeCur2 = isLocalRegion ? 'LKR' : 'USD';
-                const disp = toDisplay(rawFee, nativeCur2);
-                displayTotal += disp;
-                br(); breakdownText += `<span>Workshop: ${sess.name}:</span><span>${disp} ${displayCur}</span>`;
+    // Pre-conference sessions — only when Pre-Conference toggle is active
+    if (isPreConf) {
+        document.querySelectorAll('.preconf-session-check').forEach(chk => {
+            if (chk.checked) {
+                const sessId = chk.dataset.sessId;
+                const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === sessId);
+                if (sess) {
+                    const rawFee = effectivelyLocal ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                    const nativeCur2 = effectivelyLocal ? 'LKR' : 'USD';
+                    const disp = toDisplay(rawFee, nativeCur2);
+                    displayTotal += disp;
+                    br(); breakdownText += `<span>Workshop — ${sess.name}:</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
+                }
             }
-        }
-    });
+        });
+    }
 
     // 2. Excellence Award (LKR)
     if (isAward) {
@@ -954,7 +963,7 @@ function calculateTotalFee() {
         const awardTotal = appSettings.award_fee * pax;
         const disp = toDisplay(awardTotal, 'LKR');
         displayTotal += disp;
-        br(); breakdownText += `<span>Award (${pax} Pax):</span><span>${disp} ${displayCur}</span>`;
+        br(); breakdownText += `<span>Excellence Award (${pax} pax):</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
     }
 
     // 3. Excursion (LKR)
@@ -965,13 +974,13 @@ function calculateTotalFee() {
             const fee = locCount * appSettings.excursion_fees.local;
             const disp = toDisplay(fee, 'LKR');
             displayTotal += disp;
-            br(); breakdownText += `<span>Local Excr (${locCount}):</span><span>${disp} ${displayCur}</span>`;
+            br(); breakdownText += `<span>Excursion — Local Tickets (${locCount}):</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
         }
         if (forCount > 0) {
             const fee = forCount * appSettings.excursion_fees.foreigner;
             const disp = toDisplay(fee, 'LKR');
             displayTotal += disp;
-            br(); breakdownText += `<span>Foreign Excr (${forCount}):</span><span>${disp} ${displayCur}</span>`;
+            br(); breakdownText += `<span>Excursion — International Tickets (${forCount}):</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
         }
     }
 
@@ -1313,7 +1322,7 @@ function generateInvoice() {
         } else if (!isNoPapersInv && papers > 0) {
             const hasPaperDiscountInv = catDef?.paper_discount || false;
             const maxP = appSettings.discounts.discount_max_papers || 0;
-            const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP - 1) : papers - 1) : 0;
+            const discPapers = papers > 1 ? (maxP > 0 ? Math.min(papers - 1, maxP) : papers - 1) : 0;
             const fullExtra  = papers > 1 ? (papers - 1 - discPapers) : 0;
             const disc       = (appSettings.discounts.student_from_2nd || 0) / 100;
 
@@ -1354,24 +1363,26 @@ function generateInvoice() {
 
     }
 
-    // Inauguration opt-in — student opt-in, independent of registration type
+    // Inauguration opt-in — only when Main Conference is active
     const inaugCheck = document.getElementById('includeInauguration');
-    if (inaugCheck?.checked) {
+    if (isMain && inaugCheck?.checked) {
         const inaugFee = isLocalInv ? (appSettings.inauguration_fee || 0) : (appSettings.inauguration_fee_usd || 0);
         const inaugCur = isLocalInv ? 'LKR' : 'USD';
         if (inaugFee > 0) addItem('Inauguration Ceremony (opt-in)', inaugFee, inaugCur);
     }
 
-    // Pre-conference sessions — standalone or as add-on
-    document.querySelectorAll('.preconf-session-check').forEach(chk => {
-        if (chk.checked) {
-            const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
-            if (sess) {
-                const rawFee = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
-                addItem(`Pre-Conference Workshop: ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
+    // Pre-conference sessions — only when Pre-Conference toggle is active
+    if (isPreConf) {
+        document.querySelectorAll('.preconf-session-check').forEach(chk => {
+            if (chk.checked) {
+                const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
+                if (sess) {
+                    const rawFee = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                    addItem(`Pre-Conference Workshop — ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
+                }
             }
-        }
-    });
+        });
+    }
 
     if (isAward) {
         const pax = parseInt(document.getElementById('participantCount').value) || 1;
@@ -1384,8 +1395,14 @@ function generateInvoice() {
     if (isExcursion) {
         const locCount = parseInt(document.getElementById('excursionLocalCount').value) || 0;
         const forCount = parseInt(document.getElementById('excursionForeignCount').value) || 0;
-        if (locCount > 0) addItem(`Excursion — Local × ${locCount} (LKR ${appSettings.excursion_fees.local.toLocaleString()} each)`, locCount * appSettings.excursion_fees.local, 'LKR');
-        if (forCount > 0) addItem(`Excursion — Foreign × ${forCount} (LKR ${appSettings.excursion_fees.foreigner.toLocaleString()} each)`, forCount * appSettings.excursion_fees.foreigner, 'LKR');
+        if (locCount > 0) {
+            const perLocal = toIC(appSettings.excursion_fees.local, 'LKR');
+            addItem(`Excursion — Local Participants × ${locCount} (${invoiceCur} ${fmt(perLocal)} per ticket)`, locCount * appSettings.excursion_fees.local, 'LKR');
+        }
+        if (forCount > 0) {
+            const perForeign = toIC(appSettings.excursion_fees.foreigner, 'LKR');
+            addItem(`Excursion — International Participants × ${forCount} (${invoiceCur} ${fmt(perForeign)} per ticket)`, forCount * appSettings.excursion_fees.foreigner, 'LKR');
+        }
     }
 
     if (grandTotal === 0 && lineItems.every(i => i.amount === null)) {
