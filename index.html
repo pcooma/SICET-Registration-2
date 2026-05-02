@@ -606,7 +606,7 @@
                             <option value="" disabled selected>Select issue category…</option>
                             <option value="preconf">Pre-Conference Workshops</option>
                             <option value="award">Excellence Award</option>
-                            <option value="payment">Registration &amp; Payment</option>
+                            <option value="payment">Conference Registration &amp; Payment</option>
                             <option value="general">General Conference Inquiry</option>
                             <option value="other">Other</option>
                         </select>
@@ -628,11 +628,12 @@
                         </select>
                     </div>
 
-                    <div id="wa-paper-id-group" class="form-group row" style="display:none;margin-bottom:12px;">
-                        <div class="input-field col">
-                            <label for="wa-paper-id" style="font-size:0.85rem;">Paper ID / Title <span style="color:var(--text-muted);font-weight:400;">(optional — if not already in registration above)</span></label>
-                            <input type="text" id="wa-paper-id" placeholder="E.g. SICET26-042 or your paper title" style="font-size:0.88rem;" oninput="renderWaPreview()">
-                        </div>
+                    <!-- Paper picker — shown only for Registration & Payment and General Conference queries -->
+                    <div id="wa-paper-section" style="display:none;margin-bottom:12px;padding:12px 14px;background:rgba(74,104,255,0.05);border:1px solid rgba(74,104,255,0.2);border-radius:10px;">
+                        <p style="margin:0 0 10px;font-size:0.84rem;color:var(--text-light);font-weight:600;"><i class='bx bx-file-blank' style="color:var(--accent);margin-right:5px;"></i>Is this query about a specific paper?</p>
+                        <select id="wa-paper-select" onchange="renderWaPreview()" style="font-size:0.88rem;">
+                            <option value="">Not specific to a paper</option>
+                        </select>
                     </div>
                     <div class="form-group" style="margin-bottom:14px;">
                         <label for="wa-issue" style="font-size:0.85rem;">Describe your issue or query <span class="required">*</span></label>
@@ -1005,7 +1006,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=56"></script>
+    <script src="app.js?v=57"></script>
 </body>
 
 </html>

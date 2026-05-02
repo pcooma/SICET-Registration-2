@@ -3057,18 +3057,23 @@ function refreshWaContextBox() {
     const rows = [];
     if (ctx.refId) rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Reference ID</span><span style="color:var(--text-light);font-size:0.82rem;font-weight:600;font-family:monospace;">${ctx.refId}</span></div>`);
     if (ctx.email) rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Email</span><span style="color:var(--text-light);font-size:0.82rem;">${ctx.email}</span></div>`);
-    ctx.papers.forEach((p, i) => rows.push(`<div style="display:flex;gap:6px;"><span style="color:var(--text-muted);min-width:110px;font-size:0.82rem;">Paper ${i + 1}</span><span style="color:var(--text-light);font-size:0.82rem;">${p}</span></div>`));
 
-    if (!rows.length) { box.style.display = 'none'; renderWaPreview(); return; }
+    if (!rows.length) { box.style.display = 'none'; }
+    else {
+        box.innerHTML = `
+            <div style="padding:10px 14px;background:rgba(74,104,255,0.07);border:1px solid rgba(74,104,255,0.25);border-radius:10px;">
+                <p style="margin:0 0 8px;font-size:0.8rem;color:#4a9eff;font-weight:600;display:flex;align-items:center;gap:5px;">
+                    <i class='bx bx-link-alt'></i> Auto-detected from your registration
+                </p>
+                <div style="display:flex;flex-direction:column;gap:4px;">${rows.join('')}</div>
+            </div>`;
+        box.style.display = 'block';
+    }
 
-    box.innerHTML = `
-        <div style="padding:10px 14px;background:rgba(74,104,255,0.07);border:1px solid rgba(74,104,255,0.25);border-radius:10px;">
-            <p style="margin:0 0 8px;font-size:0.8rem;color:#4a9eff;font-weight:600;display:flex;align-items:center;gap:5px;">
-                <i class='bx bx-link-alt'></i> Auto-detected from your registration — will be included in the message
-            </p>
-            <div style="display:flex;flex-direction:column;gap:4px;">${rows.join('')}</div>
-        </div>`;
-    box.style.display = 'block';
+    // Refresh paper picker if currently visible
+    const paperSection = document.getElementById('wa-paper-section');
+    if (paperSection && paperSection.style.display !== 'none') renderWaPaperPicker();
+
     renderWaPreview();
 }
 
@@ -3114,9 +3119,16 @@ function updateWhatsAppContact() {
         }
     }
 
-    // Paper ID field: only relevant for payment / general / other
-    const paperIdGroup = document.getElementById('wa-paper-id-group');
-    if (paperIdGroup) paperIdGroup.style.display = (type && type !== 'preconf' && type !== 'award') ? '' : 'none';
+    // Paper picker: only relevant for registration/payment and general conference queries
+    const paperSection = document.getElementById('wa-paper-section');
+    if (paperSection) {
+        if (type === 'payment' || type === 'general') {
+            renderWaPaperPicker();
+            paperSection.style.display = '';
+        } else {
+            paperSection.style.display = 'none';
+        }
+    }
 
     renderWaPreview();
 }
@@ -3150,38 +3162,78 @@ function renderWaAwardCategory() {
         cats.map(c => `<option value="${c}"${c === current ? ' selected' : ''}>${c}</option>`).join('');
 }
 
+function renderWaPaperPicker() {
+    const sel = document.getElementById('wa-paper-select');
+    if (!sel) return;
+    const ctx = gatherWaContext();
+    const current = sel.value;
+    if (!ctx.papers.length) {
+        sel.innerHTML = '<option value="">Not specific to a paper</option>';
+    } else {
+        sel.innerHTML = '<option value="">Not specific to a paper</option>' +
+            ctx.papers.map((p, i) => `<option value="${p}"${p === current ? ' selected' : ''}>Paper ${i + 1}: ${p}</option>`).join('');
+    }
+}
+
 function buildWaMessage() {
-    const name    = (document.getElementById('wa-name')?.value   || '').trim();
-    const mobile  = (document.getElementById('wa-mobile')?.value || '').trim();
-    const type    = document.getElementById('wa-issue-type')?.value || '';
-    const paperId = (document.getElementById('wa-paper-id')?.value || '').trim();
-    const issue   = (document.getElementById('wa-issue')?.value   || '').trim();
-    const ctx     = gatherWaContext();
+    const name   = (document.getElementById('wa-name')?.value   || '').trim();
+    const mobile = (document.getElementById('wa-mobile')?.value || '').trim();
+    const type   = document.getElementById('wa-issue-type')?.value || '';
+    const issue  = (document.getElementById('wa-issue')?.value   || '').trim();
+    const ctx    = gatherWaContext();
     const contact = WA_CONTACTS[type] || WA_CONTACTS.other;
 
     const sel = document.getElementById('wa-issue-type');
     const issueTypeLabel = (sel && sel.selectedIndex >= 0 && sel.value) ? sel.options[sel.selectedIndex].text : '';
 
-    const selectedWorkshops = type === 'preconf'
-        ? [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value)
-        : [];
-    const awardCategory = type === 'award'
-        ? (document.getElementById('wa-award-category')?.value || '').trim()
-        : '';
+    const div = '──────────────────';
+    const lines = [`Query — SICET 2026`, div];
 
-    const lines = ['Quarries – SICET 2026', '──────────────────'];
-    if (name)   lines.push(`Name     : ${name}`);
-    if (mobile) lines.push(`Mobile   : ${mobile}`);
-    if (ctx.email) lines.push(`Email    : ${ctx.email}`);
-    if (ctx.refId) lines.push(`Ref ID   : ${ctx.refId}`);
-    ctx.papers.forEach((p, i) => lines.push(`Paper ${i + 1}  : ${p}`));
-    lines.push('──────────────────');
-    if (issueTypeLabel) lines.push(`Query re : ${issueTypeLabel}`);
-    if (selectedWorkshops.length) lines.push(`Workshop : ${selectedWorkshops.join(', ')}`);
-    if (awardCategory) lines.push(`Category : ${awardCategory}`);
-    if (paperId && !ctx.papers.length) lines.push(`Paper ID : ${paperId}`);
-    lines.push('──────────────────');
-    if (issue) lines.push(`Issue    : ${issue}`);
+    // Always: name and mobile
+    if (name)   lines.push(`Name   : ${name}`);
+    if (mobile) lines.push(`Mobile : ${mobile}`);
+
+    // Type-specific header fields
+    if (type === 'preconf') {
+        // Pre-Conference Workshops: ref ID is key for workshop check-in lookup
+        if (ctx.refId) lines.push(`Ref ID : ${ctx.refId}`);
+
+    } else if (type === 'award') {
+        // Excellence Award: ref ID for cross-reference
+        if (ctx.refId) lines.push(`Ref ID : ${ctx.refId}`);
+
+    } else if (type === 'payment') {
+        // Registration & Payment: need email + ref for tracing transactions
+        if (ctx.email) lines.push(`Email  : ${ctx.email}`);
+        if (ctx.refId) lines.push(`Ref ID : ${ctx.refId}`);
+
+    } else if (type === 'general') {
+        // General Inquiry: ref ID if available, email if available
+        if (ctx.refId) lines.push(`Ref ID : ${ctx.refId}`);
+        if (ctx.email) lines.push(`Email  : ${ctx.email}`);
+    }
+    // 'other': just name + mobile, no extra identifiers
+
+    lines.push(div);
+    if (issueTypeLabel) lines.push(`Query  : ${issueTypeLabel}`);
+
+    // Type-specific query context
+    if (type === 'preconf') {
+        const workshops = [...document.querySelectorAll('.wa-workshop-cb:checked')].map(cb => cb.value);
+        if (workshops.length) lines.push(`Workshop : ${workshops.join(', ')}`);
+
+    } else if (type === 'award') {
+        const awardCat = (document.getElementById('wa-award-category')?.value || '').trim();
+        if (awardCat) lines.push(`Category : ${awardCat}`);
+
+    } else if (type === 'payment' || type === 'general') {
+        // Include selected paper only if user explicitly picked one
+        const selectedPaper = (document.getElementById('wa-paper-select')?.value || '').trim();
+        if (selectedPaper) lines.push(`Paper  : ${selectedPaper}`);
+    }
+
+    lines.push(div);
+    if (issue) lines.push(`Issue  : ${issue}`);
 
     return { lines, type, contact, name, mobile, issue };
 }
