@@ -101,6 +101,38 @@ function doGet(e) {
     }
   }
 
+  if (action === 'getPaymentProofs') {
+    if (key !== ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' });
+    const ref = (e.parameter && e.parameter.ref) || '';
+    if (!ref) return jsonResponse({ error: 'No ref provided' });
+    try {
+      const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+      const folders = mainFolder.getFolders();
+      while (folders.hasNext()) {
+        const folder = folders.next();
+        if (folder.getName().startsWith(ref + '_')) {
+          const proofFiles = [];
+          const fileIter = folder.getFiles();
+          while (fileIter.hasNext()) {
+            const f = fileIter.next();
+            if (f.getName().startsWith('payment_proof')) {
+              proofFiles.push({
+                name:     f.getName(),
+                fileId:   f.getId(),
+                mimeType: f.getMimeType(),
+                url:      f.getUrl()
+              });
+            }
+          }
+          return jsonResponse({ success: true, files: proofFiles });
+        }
+      }
+      return jsonResponse({ success: true, files: [] });
+    } catch (err) {
+      return jsonResponse({ success: false, error: err.toString() });
+    }
+  }
+
   return jsonResponse({ status: 'SICET 2026 Registration API running' });
 }
 
@@ -136,9 +168,16 @@ function handleSubmitRegistration(data) {
     saveFileToFolder(userFolder, 'student_id_', data.Student_ID_Base64);
     data.Student_ID_Base64 = '(uploaded — see folder)';
   }
-  if (data.Payment_Proof_Base64 && data.Payment_Proof_Base64.data) {
-    saveFileToFolder(userFolder, 'payment_proof_', data.Payment_Proof_Base64);
-    data.Payment_Proof_Base64 = '(uploaded — see folder)';
+  if (data.Payment_Proof_Base64) {
+    const proofs = Array.isArray(data.Payment_Proof_Base64)
+      ? data.Payment_Proof_Base64
+      : [data.Payment_Proof_Base64];
+    const validProofs = proofs.filter(p => p && p.data);
+    validProofs.forEach((proof, i) => {
+      const prefix = validProofs.length > 1 ? 'payment_proof_' + (i + 1) + '_' : 'payment_proof_';
+      saveFileToFolder(userFolder, prefix, proof);
+    });
+    if (validProofs.length > 0) data.Payment_Proof_Base64 = '(uploaded — see folder)';
   }
 
   data.Drive_Folder_URL = folderUrl;

@@ -51,6 +51,7 @@ const ADMIN_KEY = 'sicet2026admin';
 const ADMIN_USERNAME = 'p.cooma@gmail.com';
 const ADMIN_PASSWORD = 'www.123@lk';
 
+
 // DOM Elements - General
 const registrationForm = document.getElementById('registration-form');
 
@@ -94,6 +95,7 @@ let adminLoggedIn = false;
 let pendingAdminView = 'settings';
 let appSettings = JSON.parse(JSON.stringify(defaultSettings)); // resolved properly in resolveSettings()
 let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
+let paymentProofFiles = []; // Managed array for multi-file proof of payment upload
 
 // Initialize
 async function init() {
@@ -293,12 +295,21 @@ function setupEventListeners() {
     });
 
     document.getElementById('paymentProof').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file && file.size > 5 * 1024 * 1024) {
-            showToast('File size must not exceed 5MB', 'error');
-            e.target.value = '';
+        const incoming = Array.from(e.target.files);
+        e.target.value = ''; // reset so same file can be re-selected after removal
+        for (const file of incoming) {
+            if (file.size > 5 * 1024 * 1024) {
+                showToast(`"${file.name}" exceeds 5MB — skipped.`, 'error');
+                continue;
+            }
+            if (paymentProofFiles.length >= 3) {
+                showToast('Maximum 3 proof files allowed.', 'error');
+                break;
+            }
+            const dup = paymentProofFiles.some(f => f.name === file.name && f.size === file.size);
+            if (!dup) paymentProofFiles.push(file);
         }
-        updateSubmitButtonState();
+        updatePaymentProofUI();
     });
 
     // Auto-populate certificate name from full name
@@ -1180,6 +1191,8 @@ function populateFormFromData(data) {
         showUploadedStatus('studentId', 'Student ID previously uploaded');
     }
     if (data.Payment_Proof_Base64 === '(uploaded — see folder)') {
+        paymentProofFiles = [];
+        updatePaymentProofUI();
         showUploadedStatus('paymentProof', 'Payment proof previously uploaded');
     }
 
@@ -1199,10 +1212,9 @@ function populateFormFromData(data) {
 async function handleFormSubmit(e) {
     e.preventDefault();
 
-    const paymentProofInput = document.getElementById('paymentProof');
-    if (!paymentProofInput.files[0]) {
+    if (paymentProofFiles.length === 0) {
         showToast('Please upload your proof of payment before submitting.', 'error');
-        paymentProofInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('paymentProof').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
 
@@ -1216,7 +1228,7 @@ async function handleFormSubmit(e) {
 
     const studentIdInput = document.getElementById('studentId');
     if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
-    dataObj['Payment_Proof_Base64'] = await fileToBase64(paymentProofInput.files[0]);
+    dataObj['Payment_Proof_Base64'] = await Promise.all(paymentProofFiles.map(f => fileToBase64(f)));
 
     const submitBtn = document.getElementById('btn-submit');
     submitBtn.disabled = true;
@@ -1234,6 +1246,8 @@ async function handleFormSubmit(e) {
 
     clearDraft();
     registrationForm.reset();
+    paymentProofFiles = [];
+    updatePaymentProofUI();
     document.querySelectorAll('.section-toggle').forEach(t => t.dispatchEvent(new Event('change')));
     const refEl = document.getElementById('reg-ref-id');
     if (refEl) refEl.textContent = '—';
@@ -2217,8 +2231,20 @@ function openRecordModal(sub) {
         </div>`;
     }).join('');
 
-    document.getElementById('record-modal-body').innerHTML = html || '<p style="color:var(--text-muted);">No details available.</p>';
+    const proofSection = sub.Invoice_ID
+        ? `<div class="record-section">
+            <div class="record-section-title"><i class='bx bx-receipt' style="margin-right:6px;"></i>Payment Proofs</div>
+            <div id="proof-preview-container" class="proof-drive-list"></div>
+           </div>`
+        : '';
+
+    document.getElementById('record-modal-body').innerHTML = (html || '<p style="color:var(--text-muted);">No details available.</p>') + proofSection;
     document.getElementById('record-detail-modal').classList.remove('hidden');
+
+    if (sub.Invoice_ID) {
+        const proofContainer = document.getElementById('proof-preview-container');
+        fetchAndShowPaymentProofs(sub.Invoice_ID, proofContainer);
+    }
 }
 
 function exportToExcel() {
@@ -2470,6 +2496,67 @@ async function fileToBase64(file) {
 }
 
 // Show a "previously uploaded" note next to a file input when loading saved data
+// ---- PAYMENT PROOF MULTI-FILE PREVIEW ----
+
+function updatePaymentProofUI() {
+    const area = document.getElementById('payment-proof-preview');
+    if (!area) return;
+    if (!paymentProofFiles.length) { area.innerHTML = ''; updateSubmitButtonState(); return; }
+
+    area.innerHTML = paymentProofFiles.map((file, i) => {
+        const isImg = file.type.startsWith('image/');
+        const sizeMB = (file.size / 1048576).toFixed(2);
+        const thumb = isImg
+            ? `<img class="proof-thumb" src="${URL.createObjectURL(file)}" alt="${file.name}">`
+            : `<div class="proof-pdf-icon"><i class='bx bxs-file-pdf'></i></div>`;
+        return `<div class="proof-preview-item">
+            ${thumb}
+            <div class="proof-info">
+                <span class="proof-name" title="${file.name}">${file.name}</span>
+                <span class="proof-size">${sizeMB} MB</span>
+            </div>
+            <button type="button" class="proof-remove" onclick="removePaymentProof(${i})" title="Remove">
+                <i class='bx bx-x'></i>
+            </button>
+        </div>`;
+    }).join('');
+
+    updateSubmitButtonState();
+}
+
+function removePaymentProof(idx) {
+    paymentProofFiles.splice(idx, 1);
+    updatePaymentProofUI();
+}
+
+// ---- ADMIN: FETCH PAYMENT PROOF FILES FROM DRIVE ----
+
+async function fetchAndShowPaymentProofs(refId, container) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;"><i class="bx bx-loader bx-spin"></i> Loading payment proofs…</p>';
+    try {
+        const url = `${APPS_SCRIPT_URL}?action=getPaymentProofs&ref=${encodeURIComponent(refId)}&key=${encodeURIComponent(ADMIN_KEY)}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        if (!json.success || !json.files || json.files.length === 0) {
+            container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">No payment proof files found in Drive folder.</p>';
+            return;
+        }
+        container.innerHTML = json.files.map(f => {
+            const isImg = (f.mimeType || '').startsWith('image/');
+            const thumb = isImg
+                ? `<img class="proof-thumb-admin" src="https://drive.google.com/thumbnail?id=${f.fileId}&sz=w400" alt="${f.name}" onerror="this.style.display='none'">`
+                : `<div class="proof-pdf-icon proof-pdf-admin"><i class='bx bxs-file-pdf'></i></div>`;
+            return `<a class="proof-drive-card" href="${f.url}" target="_blank" rel="noopener" title="Open ${f.name} in Drive">
+                ${thumb}
+                <span class="proof-name">${f.name}</span>
+                <span class="proof-open-hint"><i class='bx bx-link-external'></i> Open in Drive</span>
+            </a>`;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = `<p style="color:#e05;font-size:0.85rem;">Could not load files: ${err.message}</p>`;
+    }
+}
+
 function showUploadedStatus(inputId, label) {
     const input = document.getElementById(inputId);
     if (!input) return;
@@ -2537,7 +2624,7 @@ async function loadFromGoogleDrive() {
 function updateSubmitButtonState() {
     const submitBtn = document.getElementById('btn-submit');
     const submitNote = document.getElementById('submit-payment-note');
-    const hasProof = document.getElementById('paymentProof').files.length > 0;
+    const hasProof = paymentProofFiles.length > 0;
 
     if (hasProof) {
         submitBtn.classList.remove('btn-blocked');
