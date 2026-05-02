@@ -3170,7 +3170,11 @@ function renderWaPaperPicker() {
     if (!ctx.papers.length) {
         sel.innerHTML = '<option value="">Not specific to a paper</option>';
     } else {
+        const allOpt = ctx.papers.length > 1
+            ? `<option value="__all__"${'__all__' === current ? ' selected' : ''}>All my papers (${ctx.papers.length})</option>`
+            : '';
         sel.innerHTML = '<option value="">Not specific to a paper</option>' +
+            allOpt +
             ctx.papers.map((p, i) => `<option value="${p}"${p === current ? ' selected' : ''}>Paper ${i + 1}: ${p}</option>`).join('');
     }
 }
@@ -3227,9 +3231,13 @@ function buildWaMessage() {
         if (awardCat) lines.push(`Category : ${awardCat}`);
 
     } else if (type === 'payment' || type === 'general') {
-        // Include selected paper only if user explicitly picked one
+        // Include selected paper(s) only if user explicitly picked one
         const selectedPaper = (document.getElementById('wa-paper-select')?.value || '').trim();
-        if (selectedPaper) lines.push(`Paper  : ${selectedPaper}`);
+        if (selectedPaper === '__all__') {
+            ctx.papers.forEach((p, i) => lines.push(`Paper ${i + 1} : ${p}`));
+        } else if (selectedPaper) {
+            lines.push(`Paper  : ${selectedPaper}`);
+        }
     }
 
     lines.push(div);
