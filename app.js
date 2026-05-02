@@ -970,13 +970,18 @@ function calculateTotalFee() {
     if (isExcursion) {
         const locCount = parseInt(document.getElementById('excursionLocalCount').value) || 0;
         const forCount = parseInt(document.getElementById('excursionForeignCount').value) || 0;
-        if (locCount > 0) {
+        // Only count the ticket type that matches the attendee's region so that hidden
+        // residual values from a previous region selection don't sneak into the total.
+        // When no region is selected both fields are visible so both counts apply.
+        const countLocal   = !region || isLocalRegion;
+        const countForeign = !region || !isLocalRegion;
+        if (locCount > 0 && countLocal) {
             const fee = locCount * appSettings.excursion_fees.local;
             const disp = toDisplay(fee, 'LKR');
             displayTotal += disp;
             br(); breakdownText += `<span>Excursion — Local Tickets (${locCount}):</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
         }
-        if (forCount > 0) {
+        if (forCount > 0 && countForeign) {
             const fee = forCount * appSettings.excursion_fees.foreigner;
             const disp = toDisplay(fee, 'LKR');
             displayTotal += disp;
@@ -1255,6 +1260,16 @@ function generateInvoice() {
         showToast('Please select registration items to generate an invoice.', 'error');
         return;
     }
+    if (isMain && !region) {
+        showToast('Please select your Attendee Region before generating the invoice.', 'error');
+        document.getElementById('attendeeRegion')?.focus();
+        return;
+    }
+    if (isMain && !category) {
+        showToast('Please select your Attendee Category before generating the invoice.', 'error');
+        document.getElementById('attendeeCategory')?.focus();
+        return;
+    }
 
     const billToType = document.querySelector('input[name="Bill_To"]:checked')?.value || 'Personal';
     const orgLegalName = document.getElementById('orgLegalName').value || org;
@@ -1291,6 +1306,8 @@ function generateInvoice() {
         return invoiceCur === 'LKR' ? Math.round(amount * fxRateInv) : +((amount / fxRateInv).toFixed(2));
     };
 
+    const fmt = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     let lineItems = [];
     let grandTotal = 0;
     const addItem = (desc, amount, fromCur) => {
@@ -1300,7 +1317,9 @@ function generateInvoice() {
     };
 
     if (isMain) {
-        const papers = parseInt(document.getElementById('numberOfPapers').value) || 0;
+        // || 1: for paper-holding categories there is always at least 1 paper; avoids
+        // the no-papers guard silently dropping the conference fee from the invoice.
+        const papers = parseInt(document.getElementById('numberOfPapers').value) || 1;
         const nativeCur = isLocalInv ? 'LKR' : 'USD';
 
         // Resolve base fee from flexible categories
@@ -1395,11 +1414,13 @@ function generateInvoice() {
     if (isExcursion) {
         const locCount = parseInt(document.getElementById('excursionLocalCount').value) || 0;
         const forCount = parseInt(document.getElementById('excursionForeignCount').value) || 0;
-        if (locCount > 0) {
+        const countLocalInv   = !region || isLocalInv;
+        const countForeignInv = !region || !isLocalInv;
+        if (locCount > 0 && countLocalInv) {
             const perLocal = toIC(appSettings.excursion_fees.local, 'LKR');
             addItem(`Excursion — Local Participants × ${locCount} (${invoiceCur} ${fmt(perLocal)} per ticket)`, locCount * appSettings.excursion_fees.local, 'LKR');
         }
-        if (forCount > 0) {
+        if (forCount > 0 && countForeignInv) {
             const perForeign = toIC(appSettings.excursion_fees.foreigner, 'LKR');
             addItem(`Excursion — International Participants × ${forCount} (${invoiceCur} ${fmt(perForeign)} per ticket)`, forCount * appSettings.excursion_fees.foreigner, 'LKR');
         }
@@ -1415,8 +1436,6 @@ function generateInvoice() {
     const R = 196;
     const W = R - L;
     let Y = 14;
-
-    const fmt = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     function drawRow(label, amount, currency, isBold, isShaded) {
         const splitLabel = doc.splitTextToSize(label, W - 48);
@@ -2710,7 +2729,15 @@ function rebuildSessionCheckboxes() {
     });
     // Re-attach price-trigger listeners
     container.querySelectorAll('.price-trigger').forEach(el => {
-        el.addEventListener('change', calculateTotalFee);
+        el.addEventListener('change', () => {
+            // Auto-enable the Pre-Conference toggle so the session fee is counted when
+            // a session is checked while only Main Conference is toggled.
+            if (el.checked && !document.getElementById('togglePreConf')?.checked) {
+                const toggle = document.getElementById('togglePreConf');
+                if (toggle) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+            }
+            calculateTotalFee();
+        });
     });
 }
 
