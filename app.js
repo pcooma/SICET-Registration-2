@@ -2499,8 +2499,16 @@ async function fileToBase64(file) {
 // ---- PAYMENT PROOF MULTI-FILE PREVIEW ----
 
 function updatePaymentProofUI() {
-    const area = document.getElementById('payment-proof-preview');
-    if (!area) return;
+    let area = document.getElementById('payment-proof-preview');
+    if (!area) {
+        // Fallback: create the preview container if old cached HTML omitted it
+        const input = document.getElementById('paymentProof');
+        if (!input) return;
+        area = document.createElement('div');
+        area.id = 'payment-proof-preview';
+        area.className = 'proof-preview-list';
+        input.insertAdjacentElement('afterend', area);
+    }
     if (!paymentProofFiles.length) { area.innerHTML = ''; updateSubmitButtonState(); return; }
 
     area.innerHTML = paymentProofFiles.map((file, i) => {
