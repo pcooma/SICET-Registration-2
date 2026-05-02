@@ -238,10 +238,13 @@ function upsertMasterSheet(data, mainFolder, folderUrl) {
       'Registration_Type', 'Calculated_Total_Fee', 'Currency',
       'Certificate_Name', 'Designation', 'Food_Preference', 'Number_of_Papers',
       'Include_Inauguration',
-      'Company_Name', 'Participant_Count', 'Award_Category',
+      'Company_Name', 'Participant_Count', 'Participant_Names', 'Award_Category',
       'Primary_Reason', 'Primary_Reason_Other',
       'Excursion_Local_Count', 'Excursion_Foreign_Count',
       'Excursion_Mobility', 'Excursion_Activity',
+      'PreConf_Sessions',
+      'Address', 'Bill_To', 'Billing_Org_Name', 'Billing_Tax_ID',
+      'Billing_Address', 'Billing_Finance_Email',
       'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL'
     ]);
   }
@@ -289,6 +292,7 @@ function buildRow(headers, data, folderUrl) {
     Include_Inauguration:  data.Include_Inauguration   || '',
     Company_Name:          data.Company_Name           || '',
     Participant_Count:     data.Participant_Count      || '',
+    Participant_Names:     data.Participant_Names      || '',
     Award_Category:        data.Award_Category         || '',
     Primary_Reason:        data.Primary_Reason         || '',
     Primary_Reason_Other:  data.Primary_Reason_Other   || '',
@@ -296,6 +300,13 @@ function buildRow(headers, data, folderUrl) {
     Excursion_Foreign_Count: data.Excursion_Foreign_Count || '',
     Excursion_Mobility:    data.Excursion_Mobility     || '',
     Excursion_Activity:    data.Excursion_Activity     || '',
+    PreConf_Sessions:      data.PreConf_Sessions       || '',
+    Address:               data.Address                || '',
+    Bill_To:               data.Bill_To                || '',
+    Billing_Org_Name:      data.Billing_Org_Name       || '',
+    Billing_Tax_ID:        data.Billing_Tax_ID         || '',
+    Billing_Address:       data.Billing_Address        || '',
+    Billing_Finance_Email: data.Billing_Finance_Email  || '',
     Transaction_Ref:       data.Transaction_Ref        || '',
     Additional_Info:       data.Additional_Info        || '',
     Drive_Folder_URL:      folderUrl                   || ''

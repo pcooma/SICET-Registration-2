@@ -1001,6 +1001,15 @@ function collectFormData(refId) {
     if (document.getElementById('toggleExcursion').checked)  typesArr.push('Excursion');
     if (document.getElementById('togglePreConf')?.checked)   typesArr.push('Pre-Conference Workshops');
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
+
+    // Serialize selected pre-conference session names for the admin sheet
+    const selectedSessionNames = [];
+    document.querySelectorAll('.preconf-session-check:checked').forEach(chk => {
+        const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
+        if (sess) selectedSessionNames.push(sess.name);
+    });
+    dataObj['PreConf_Sessions'] = selectedSessionNames.join(', ');
+
     return dataObj;
 }
 
@@ -1150,6 +1159,18 @@ function populateFormFromData(data) {
     const _waMob  = document.getElementById('wa-mobile');
     if (_waName && data.Full_Name) _waName.value = data.Full_Name;
     if (_waMob  && data.Phone)     _waMob.value  = data.Phone;
+
+    // Show "previously uploaded" badge next to file inputs when files are on record
+    if (data.Student_ID_Base64 === '(uploaded — see folder)') {
+        showUploadedStatus('studentId', 'Student ID previously uploaded');
+    }
+    if (data.Payment_Proof_Base64 === '(uploaded — see folder)') {
+        showUploadedStatus('paymentProof', 'Payment proof previously uploaded');
+    }
+
+    // Refresh WhatsApp context box and preview so it reflects the loaded registration data
+    refreshWaContextBox();
+    renderWaPreview();
 }
 
 // STEP 1 — Save draft + get Ref ID (no payment proof required)
@@ -1711,6 +1732,10 @@ function restoreDraft() {
     // 7. Final Calculation Recalc
     calculateTotalFee();
     showToast('Draft restored successfully', 'success');
+
+    // Update WhatsApp context box so it reflects the restored registration data
+    refreshWaContextBox();
+    renderWaPreview();
 }
 
 function clearDraft() {
@@ -2378,6 +2403,20 @@ async function fileToBase64(file) {
         });
         reader.readAsDataURL(file);
     });
+}
+
+// Show a "previously uploaded" note next to a file input when loading saved data
+function showUploadedStatus(inputId, label) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const container = input.closest('.input-field') || input.parentElement;
+    const existing = container.querySelector('.upload-status-note');
+    if (existing) existing.remove();
+    const note = document.createElement('div');
+    note.className = 'upload-status-note';
+    note.style.cssText = 'margin-top:6px;padding:7px 12px;background:rgba(37,211,102,0.09);border:1px solid rgba(37,211,102,0.35);border-radius:7px;font-size:0.82rem;color:#25d366;display:flex;align-items:center;gap:7px;';
+    note.innerHTML = `<i class='bx bx-check-circle' style="font-size:1rem;flex-shrink:0;"></i><span>${label} — re-upload only if you need to replace it.</span>`;
+    input.insertAdjacentElement('afterend', note);
 }
 
 async function submitToGoogleDrive(dataObj) {
