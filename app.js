@@ -1120,7 +1120,24 @@ function populateFormFromData(data) {
         if (el && el.value) el.dispatchEvent(new Event('change'));
     });
 
-    // 5. Restore "Other" purpose text field visibility
+    // 5. Re-populate paper fields — MUST run after Step 4 because attendeeCategory's change
+    //    handler calls generatePaperBlocks() which overwrites the container with empty blocks,
+    //    wiping values that were set in Step 3.
+    const nPapersLoad = parseInt(data.Number_of_Papers) || 0;
+    for (let i = 1; i <= nPapersLoad; i++) {
+        const titleEl = document.getElementById(`paperTitle_${i}`);
+        const idEl    = document.getElementById(`paperId_${i}`);
+        const apcEl   = registrationForm.querySelector(`[name="Paper_${i}_Include_APC"]`);
+        const jEl     = document.getElementById(`journal_${i}`);
+        if (titleEl && data[`Paper_${i}_Title`]) titleEl.value = data[`Paper_${i}_Title`];
+        if (idEl    && data[`Paper_${i}_ID`])    idEl.value    = data[`Paper_${i}_ID`];
+        if (apcEl && (data[`Paper_${i}_Include_APC`] === true || data[`Paper_${i}_Include_APC`] === 'true' || data[`Paper_${i}_Include_APC`] === 'on')) {
+            if (!apcEl.checked) { apcEl.checked = true; apcEl.dispatchEvent(new Event('change')); }
+        }
+        if (jEl && data[`Paper_${i}_Journal`]) jEl.value = data[`Paper_${i}_Journal`];
+    }
+
+    // 6. Restore "Other" purpose text field visibility
     const prSel = document.getElementById('primaryReason');
     if (prSel && prSel.value === 'Other') {
         document.getElementById('primary-reason-other-group')?.classList.remove('hidden');
@@ -1660,7 +1677,38 @@ function restoreDraft() {
         }
     }
 
-    // 4. Final Calculation Recalc
+    // 4. Fire region/category cascades so field visibility matches the restored values.
+    //    attendeeRegion change controls country/excursion ticket visibility.
+    //    attendeeCategory change controls designation, student ID, inauguration — and also
+    //    calls generatePaperBlocks() which clears the paper values just set in step 3.
+    ['attendeeRegion', 'attendeeCategory'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.value) el.dispatchEvent(new Event('change'));
+    });
+
+    // 5. Re-populate paper fields — same reason as populateFormFromData: category change
+    //    regenerated paper blocks, wiping the values set in step 3.
+    const nPapersDraft = parseInt(formDraft['Number_of_Papers']) || 0;
+    for (let i = 1; i <= nPapersDraft; i++) {
+        const titleEl = document.getElementById(`paperTitle_${i}`);
+        const idEl    = document.getElementById(`paperId_${i}`);
+        const apcEl   = registrationForm.querySelector(`[name="Paper_${i}_Include_APC"]`);
+        const jEl     = document.getElementById(`journal_${i}`);
+        if (titleEl && formDraft[`Paper_${i}_Title`]) titleEl.value = formDraft[`Paper_${i}_Title`];
+        if (idEl    && formDraft[`Paper_${i}_ID`])    idEl.value    = formDraft[`Paper_${i}_ID`];
+        if (apcEl && formDraft[`Paper_${i}_Include_APC`] === true && !apcEl.checked) {
+            apcEl.checked = true; apcEl.dispatchEvent(new Event('change'));
+        }
+        if (jEl && formDraft[`Paper_${i}_Journal`]) jEl.value = formDraft[`Paper_${i}_Journal`];
+    }
+
+    // 6. Restore "Other" purpose text field visibility
+    const prSelDraft = document.getElementById('primaryReason');
+    if (prSelDraft && prSelDraft.value === 'Other') {
+        document.getElementById('primary-reason-other-group')?.classList.remove('hidden');
+    }
+
+    // 7. Final Calculation Recalc
     calculateTotalFee();
     showToast('Draft restored successfully', 'success');
 }
@@ -2881,8 +2929,8 @@ function gatherWaContext() {
         const nPapers = parseInt(waLoadedData.Number_of_Papers) || 0;
         const papers  = [];
         for (let i = 1; i <= nPapers; i++) {
-            const pid   = (waLoadedData[`paperId_${i}`]    || '').trim();
-            const title = (waLoadedData[`paperTitle_${i}`] || '').trim();
+            const pid   = (waLoadedData[`Paper_${i}_ID`]    || '').trim();
+            const title = (waLoadedData[`Paper_${i}_Title`] || '').trim();
             if (title) papers.push(pid ? `[${pid}] ${title}` : title);
         }
         return { refId, email, papers };
