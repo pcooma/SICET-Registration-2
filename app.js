@@ -6,20 +6,19 @@ const defaultSettings = {
         nonsaarc: { author: 250, nonauthor: 200, student: 150 }
     },
     discounts: {
-        student_from_2nd: 10,       // percentage
-        discount_max_papers: 0      // 0 = unlimited; N = cap at N papers receiving discount
+        student_from_2nd: 10,       // percentage discount on 2nd paper onwards
+        discount_max_papers: 3      // max additional papers that receive the discount
     },
     award_fee: 10000,
     excursion_fees: {
-        local: 15000,
-        foreigner: 17000
+        local: 16250,       // LKR (= $50 × 325)
+        foreigner: 50       // USD
     },
     inauguration_fee: 10000,         // LKR; Student opt-in only (Local)
     inauguration_fee_usd: 30,       // USD; Student opt-in only (Non-local)
     journals: [
-        { id: 'j1', name: 'Scopus Q1', fee: 300 },
-        { id: 'j2', name: 'Scopus Q2', fee: 200 },
-        { id: 'j3', name: 'Other', fee: 100 }
+        { id: 'j1', name: 'Advances in Science and Technology', fee: 0 },
+        { id: 'j2', name: 'International Journal of Disaster Resilience in the Built Environment', fee: 0 }
     ],
     pre_conference_sessions: [
         { id: 'pcs1', name: 'AI & Machine Learning Workshop',          fee_local: 3500, fee_saarc: 35, fee_nonsaarc: 50 },
@@ -28,10 +27,11 @@ const defaultSettings = {
         { id: 'pcs4', name: 'Research Methodology & Academic Writing', fee_local: 2500, fee_saarc: 25, fee_nonsaarc: 35 }
     ],
     categories: [
-        { id: 'author',           label: 'Author',             fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false, paper_discount: false, is_workshop_only: false },
-        { id: 'nonauthor',        label: 'Non-Author',         fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: false },
-        { id: 'student',          label: 'Student',            fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150, is_student: true,  no_papers: false, paper_discount: true,  is_workshop_only: false },
-        { id: 'workshopattendee', label: 'Workshop Attendee',  fee_local: 0,     fee_saarc: 0,   fee_nonsaarc: 0,   is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: true  }
+        { id: 'studentauthor',    label: 'Student Author',        fee_local: 12500, fee_saarc: 90,  fee_nonsaarc: 125, is_student: true,  no_papers: false, paper_discount: true,  is_workshop_only: false },
+        { id: 'generalauthor',    label: 'General Author',        fee_local: 25000, fee_saarc: 100, fee_nonsaarc: 150, is_student: false, no_papers: false, paper_discount: true,  is_workshop_only: false },
+        { id: 'studentpart',      label: 'Student Participant',   fee_local: 10000, fee_saarc: 20,  fee_nonsaarc: 35,  is_student: true,  no_papers: true,  paper_discount: false, is_workshop_only: false },
+        { id: 'generalpart',      label: 'General Participant',   fee_local: 12500, fee_saarc: 40,  fee_nonsaarc: 70,  is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: false },
+        { id: 'workshopattendee', label: 'Workshop Attendee',     fee_local: 0,     fee_saarc: 0,   fee_nonsaarc: 0,   is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: true  }
     ],
     chair_name: 'Dr. Gayashika Fernando',
     refund_deadline: 'August 23, 2025',
@@ -488,7 +488,7 @@ function generatePaperBlocks(count) {
     // Create journal options string
     let journalOptions = '<option value="" disabled selected>Select Journal</option>';
     appSettings.journals.forEach(j => {
-        journalOptions += `<option value="${j.name}" data-fee="${j.fee}">${j.name} ($${j.fee})</option>`;
+        journalOptions += `<option value="${j.name}" data-fee="${j.fee}">${j.name}${j.fee > 0 ? ' ($' + j.fee + ')' : ' — No APC'}</option>`;
     });
 
     for (let i = 1; i <= count; i++) {
@@ -618,7 +618,7 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
     const cats        = appSettings.categories || [];
     const awdFee      = appSettings.award_fee || 0;                   // LKR native
     const exclLoc     = appSettings.excursion_fees?.local    || 0;    // LKR native
-    const exclFor     = appSettings.excursion_fees?.foreigner || 0;   // LKR native
+    const exclFor     = appSettings.excursion_fees?.foreigner || 0;   // USD native
     const inaugFeeLKR = appSettings.inauguration_fee     || 0;
     const inaugFeeUSD = appSettings.inauguration_fee_usd || 0;
 
@@ -642,9 +642,9 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
                 <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${cat.fee_nonsaarc}</td>
             </tr>`;
         });
-        const awUSD = Math.round(awdFee / fxRate);
-        const elUSD = Math.round(exclLoc / fxRate);
-        const efUSD = Math.round(exclFor / fxRate);
+        const awUSD  = Math.round(awdFee / fxRate);
+        const elUSD  = Math.round(exclLoc / fxRate);
+        const efLKR  = Math.round(exclFor * fxRate);  // foreigner fee is USD; convert to LKR for local column
         rows += `<tr style="${rb}">
             <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excellence Award (per person)</td>
             <td style="text-align:right;padding:5px 4px;color:var(--accent);">${awdFee.toLocaleString('en-US')}</td>
@@ -659,9 +659,9 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
         </tr>
         <tr style="${rb}">
             <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion — International Participant Ticket</td>
-            <td style="text-align:right;padding:5px 4px;color:var(--accent);">${exclFor.toLocaleString('en-US')}</td>
-            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${efUSD}</td>
-            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${efUSD}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--accent);">${efLKR.toLocaleString('en-US')}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${exclFor}</td>
+            <td style="text-align:right;padding:5px 4px;color:var(--text-light);">${exclFor}</td>
         </tr>`;
 
         el.innerHTML = `<div style="margin-top:12px;padding:12px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
@@ -737,7 +737,7 @@ function _previewRegTypes(category, isLocal, isSAARC, hasRgn, fxRate, dispCur, t
         } else {
             rows += `<tr style="${rb}">
                 <td style="padding:5px 6px 5px 0;color:var(--text-light);">Excursion — International Participant Ticket</td>
-                <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclFor, 'LKR')?.toLocaleString('en-US')}</td>
+                <td style="text-align:right;padding:5px 6px;color:var(--text-light);">${toDisp(exclFor, 'USD')?.toLocaleString('en-US')}</td>
             </tr>`;
         }
 
@@ -997,7 +997,7 @@ function calculateTotalFee() {
         }
         if (forCount > 0 && countForeign) {
             const fee = forCount * appSettings.excursion_fees.foreigner;
-            const disp = toDisplay(fee, 'LKR');
+            const disp = toDisplay(fee, 'USD');
             displayTotal += disp;
             br(); breakdownText += `<span>Excursion — International Tickets (${forCount}):</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
         }
@@ -1456,8 +1456,8 @@ function generateInvoice() {
             addItem(`Excursion — Local Participants × ${locCount} (${invoiceCur} ${fmt(perLocal)} per ticket)`, locCount * appSettings.excursion_fees.local, 'LKR');
         }
         if (forCount > 0 && countForeignInv) {
-            const perForeign = toIC(appSettings.excursion_fees.foreigner, 'LKR');
-            addItem(`Excursion — International Participants × ${forCount} (${invoiceCur} ${fmt(perForeign)} per ticket)`, forCount * appSettings.excursion_fees.foreigner, 'LKR');
+            const perForeign = toIC(appSettings.excursion_fees.foreigner, 'USD');
+            addItem(`Excursion — International Participants × ${forCount} (${invoiceCur} ${fmt(perForeign)} per ticket)`, forCount * appSettings.excursion_fees.foreigner, 'USD');
         }
     }
 
@@ -1639,7 +1639,7 @@ function generateInvoice() {
         'Direct Deposit (USD): Recommended for international participants. Transfer to Sampath Bank PLC via SWIFT (BSAMLKLX), Account No. 003910003002.',
         'Wire Transfer (LKR): Use the same Sampath Bank account. Recommended for participants with Sri Lankan banking access.',
         'Debit/Credit Card (LKR): Pay via the SLIIT Payment Gateway (pay.sliit.lk). A 1.5% bank service charge applies.',
-        `Refund Policy: Requests must be sent to sicet@sliit.lk by ${refundDeadline}. Admin fee: US$20 / LKR 6,000.`
+        `Refund Policy: Requests must be sent to sicet@sliit.lk by ${refundDeadline}. Admin fee: US$20.`
     ];
 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(60, 60, 60);

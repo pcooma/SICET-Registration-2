@@ -10,7 +10,7 @@
         rel="stylesheet">
     <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=15">
+    <link rel="stylesheet" href="style.css?v=16">
     <style>@keyframes sicet-spin { to { transform: rotate(360deg); } }</style>
 </head>
 
@@ -153,9 +153,10 @@
                             <label for="attendeeCategory">Attendee Category <span class="required">*</span></label>
                             <select id="attendeeCategory" name="Attendee_Category" class="price-trigger" required>
                                 <option value="" disabled selected>Select Category</option>
-                                <option value="Author">Author</option>
-                                <option value="Non-Author">Non-Author</option>
-                                <option value="Student">Student</option>
+                                <option value="Student Author">Student Author</option>
+                                <option value="General Author">General Author</option>
+                                <option value="Student Participant">Student Participant</option>
+                                <option value="General Participant">General Participant</option>
                             </select>
                         </div>
                     </div>
@@ -434,7 +435,7 @@
                                 <li><strong style="color:var(--text-light);">Direct Deposit (USD):</strong> Recommended for international participants. Bank transfer to Sampath Bank PLC, Malabe Branch — see bank details on your invoice.</li>
                                 <li><strong style="color:var(--text-light);">Wire Transfer (LKR):</strong> Recommended for participants with Sri Lankan banking access. Use the same Sampath Bank account details.</li>
                                 <li><strong style="color:var(--text-light);">Debit/Credit Card (LKR):</strong> Pay online via the SLIIT Payment Gateway. A 1.5% bank service charge applies. Exchange rate: 1 USD = 325 LKR (indicative).</li>
-                                <li><strong style="color:var(--text-light);">Refund Policy:</strong> All refund requests must be sent to <a href="mailto:sicet@sliit.lk" style="color:#4a9eff;">sicet@sliit.lk</a> by <span id="notice-refund-deadline">August 23, 2025</span>. An administrative fee of US$20 / LKR 6,000 applies to all refunds.</li>
+                                <li><strong style="color:var(--text-light);">Refund Policy:</strong> All refund requests must be sent to <a href="mailto:sicet@sliit.lk" style="color:#4a9eff;">sicet@sliit.lk</a> by <span id="notice-refund-deadline">August 23, 2025</span>. An administrative fee of US$20 applies to all refunds.</li>
                             </ul>
                             <!-- Bank Details Summary -->
                             <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:0.84rem;">
@@ -838,11 +839,11 @@
                             </div>
                         </div>
                         <div class="settings-group">
-                            <h4>Excursion (LKR)</h4>
+                            <h4>Excursion</h4>
                             <div class="form-group row">
-                                <div class="input-field col"><label>Local</label><input type="number"
+                                <div class="input-field col"><label>Local (LKR)</label><input type="number"
                                         id="fee_excursion_local" required></div>
-                                <div class="input-field col"><label>Foreigner</label><input type="number"
+                                <div class="input-field col"><label>Foreigner (USD)</label><input type="number"
                                         id="fee_excursion_foreigner" required></div>
                             </div>
                         </div>
@@ -901,7 +902,7 @@
                         <h3><i class='bx bx-book'></i> APC Journals & Fees</h3>
                         <div class="settings-group">
                             <h4>APC Fee Collection Status</h4>
-                            <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:8px;">Enable once authors have received their Paper IDs and you are ready to collect APC fees. Until enabled, the Paper ID field is hidden from registrants.</p>
+                            <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:8px;">Enable once authors have received their Paper IDs and you are ready to collect APC fees. Until enabled, the Paper ID field is hidden from registrants. <strong style="color:#e8b84b;">Note:</strong> APC for <em>Advances in Science and Technology</em> is pending confirmation — update the fee before enabling.</p>
                             <div class="form-checkbox">
                                 <input type="checkbox" id="setting_apc_active">
                                 <label for="setting_apc_active" style="font-weight:500;">Enable APC fee collection (makes Paper ID field visible to registrants)</label>
@@ -1007,7 +1008,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=64"></script>
+    <script src="app.js?v=65"></script>
 </body>
 
 </html>
