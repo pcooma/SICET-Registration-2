@@ -1172,7 +1172,7 @@ function populateFormFromData(data) {
     const skip = new Set([
         'Registration_Type', 'Number_of_Papers', 'Calculated_Total_Fee', 'Currency',
         'Submission_Date', 'Invoice_ID', 'Status', 'Drive_Folder_URL',
-        'Student_ID_Base64', 'Payment_Proof_Base64', 'action',
+        'Student_ID_Base64', 'Payment_Proof_Base64', 'Workshop_ID_Base64', 'action',
         'Registering_Main', 'Registering_Award', 'Registering_Excursion', 'Registering_PreConf'
     ]);
 
