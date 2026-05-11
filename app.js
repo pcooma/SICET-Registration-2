@@ -2923,12 +2923,14 @@ function renderSessionsAdmin() {
     (appSettings.pre_conference_sessions || []).forEach((sess, idx) => {
         const div = document.createElement('div');
         div.className = 'session-entry form-group';
-        div.style.cssText = 'display:grid;grid-template-columns:2fr 100px 100px 100px 36px;gap:8px;align-items:end;margin-bottom:8px;';
+        div.style.cssText = 'display:grid;grid-template-columns:2fr 90px 90px 90px 70px 70px 36px;gap:8px;align-items:end;margin-bottom:8px;';
         div.innerHTML = `
             <div class="input-field"><label>Workshop Name</label><input type="text" class="sess-name" value="${sess.name}" required></div>
             <div class="input-field"><label>Local (LKR)</label><input type="number" class="sess-fee-local" value="${sess.fee_local}" required></div>
             <div class="input-field"><label>SAARC (USD)</label><input type="number" class="sess-fee-saarc" value="${sess.fee_saarc}" required></div>
             <div class="input-field"><label>Non-SAARC (USD)</label><input type="number" class="sess-fee-nonsaarc" value="${sess.fee_nonsaarc}" required></div>
+            <div class="input-field"><label>Academic %</label><input type="number" class="sess-academic-pct" value="${sess.academic_discount_pct || 0}" min="0" max="100"></div>
+            <div class="input-field"><label>Student %</label><input type="number" class="sess-student-pct" value="${sess.student_discount_pct || 0}" min="0" max="100"></div>
             <button type="button" class="btn-remove-journal" onclick="removeSession(${idx})" title="Remove"><i class='bx bx-trash'></i></button>
         `;
         list.appendChild(div);
@@ -2943,7 +2945,7 @@ window.removeSession = function(idx) {
 
 function addSessionField() {
     if (!appSettings.pre_conference_sessions) appSettings.pre_conference_sessions = [];
-    appSettings.pre_conference_sessions.push({ id: 'sess_' + Date.now(), name: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0 });
+    appSettings.pre_conference_sessions.push({ id: 'sess_' + Date.now(), name: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0, academic_discount_pct: 0, student_discount_pct: 0 });
     renderSessionsAdmin();
 }
 
