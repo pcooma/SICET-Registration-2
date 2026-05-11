@@ -1985,9 +1985,9 @@ function updateAdminDashboard() {
     statTotal.textContent = total;
     statMain.textContent  = mainCount;
     statAward.textContent = awardExc;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     const workshopCount = submissions.filter(s => s.Registration_Type && s.Registration_Type.includes('Pre-Conference')).length;
     set('stat-workshops', workshopCount);
-    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('stat-local',         localCount);
     set('stat-saarc',         saarcCount);
     set('stat-nonsaarc',      nonSaarc);
