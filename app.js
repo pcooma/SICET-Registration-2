@@ -21,10 +21,10 @@ const defaultSettings = {
         { id: 'j2', name: 'International Journal of Disaster Resilience in the Built Environment', fee: 0 }
     ],
     pre_conference_sessions: [
-        { id: 'pcs1', name: 'AI & Machine Learning Workshop',          fee_local: 3500, fee_saarc: 35, fee_nonsaarc: 50 },
-        { id: 'pcs2', name: 'Cybersecurity Essentials Bootcamp',       fee_local: 4000, fee_saarc: 40, fee_nonsaarc: 60 },
-        { id: 'pcs3', name: 'IoT & Embedded Systems Lab',              fee_local: 3000, fee_saarc: 30, fee_nonsaarc: 45 },
-        { id: 'pcs4', name: 'Research Methodology & Academic Writing', fee_local: 2500, fee_saarc: 25, fee_nonsaarc: 35 }
+        { id: 'pcs1', name: 'AI & Machine Learning Workshop',          fee_local: 3500, fee_saarc: 35, fee_nonsaarc: 50, academic_discount_pct: 20, student_discount_pct: 30 },
+        { id: 'pcs2', name: 'Cybersecurity Essentials Bootcamp',       fee_local: 4000, fee_saarc: 40, fee_nonsaarc: 60, academic_discount_pct: 20, student_discount_pct: 30 },
+        { id: 'pcs3', name: 'IoT & Embedded Systems Lab',              fee_local: 3000, fee_saarc: 30, fee_nonsaarc: 45, academic_discount_pct: 20, student_discount_pct: 30 },
+        { id: 'pcs4', name: 'Research Methodology & Academic Writing', fee_local: 2500, fee_saarc: 25, fee_nonsaarc: 35, academic_discount_pct: 20, student_discount_pct: 30 }
     ],
     categories: [
         { id: 'studentauthor',    label: 'Student Author',        fee_local: 12500, fee_saarc: 90,  fee_nonsaarc: 125, is_student: true,  no_papers: false, paper_discount: true,  is_workshop_only: false },
@@ -97,6 +97,7 @@ let appSettings = JSON.parse(JSON.stringify(defaultSettings)); // resolved prope
 let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
 let paymentProofFiles = []; // Managed array for multi-file proof of payment upload
 let paymentProofPreviouslyUploaded = false; // true when loaded record already has proof on server
+let workshopIdPreviouslyUploaded = false; // true when loaded record already has workshop ID on server
 
 // Initialize
 async function init() {
@@ -151,6 +152,12 @@ function setupEventListeners() {
                 const hasSessions = (appSettings.pre_conference_sessions || []).length > 0;
                 if ((mainOn || preconfOn) && hasSessions) sharedSess.classList.remove('hidden');
                 else sharedSess.classList.add('hidden');
+                // Workshop discount section visibility mirrors Pre-Conf toggle (only relevant when workshops are standalone)
+                const wkDiscSection = document.getElementById('workshop-discount-section');
+                if (wkDiscSection) {
+                    if (preconfOn && hasSessions) wkDiscSection.classList.remove('hidden');
+                    else wkDiscSection.classList.add('hidden');
+                }
             }
 
             // Paper blocks: only visible when Main Conference is selected and category has papers
@@ -292,6 +299,28 @@ function setupEventListeners() {
         if (file && file.size > 5 * 1024 * 1024) { // 5MB
             showToast('File size must not exceed 5MB', 'error');
             e.target.value = '';
+        }
+    });
+
+    // Workshop discount tier — show/hide ID upload section
+    document.getElementById('workshopDiscountTier')?.addEventListener('change', (e) => {
+        const tier = e.target.value;
+        const uploadSec = document.getElementById('workshop-id-upload-section');
+        if (uploadSec) {
+            if (tier === 'academic' || tier === 'student') uploadSec.classList.remove('hidden');
+            else uploadSec.classList.add('hidden');
+        }
+        calculateTotalFee();
+    });
+
+    // Workshop ID file size validation
+    document.getElementById('workshopId')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && file.size > 5 * 1024 * 1024) {
+            showToast('Workshop ID file must not exceed 5MB', 'error');
+            e.target.value = '';
+        } else if (file) {
+            workshopIdPreviouslyUploaded = false; // new file replaces previous
         }
     });
 
@@ -792,28 +821,46 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
     const sessions = appSettings.pre_conference_sessions || [];
     if (!sessions.length) { el.innerHTML = ''; return; }
 
+    const tier    = document.getElementById('workshopDiscountTier')?.value || 'regular';
+
     let rows = '';
     sessions.forEach(sess => {
+        const acPct   = sess.academic_discount_pct || 0;
+        const stPct   = sess.student_discount_pct  || 0;
+        const discPct = tier === 'academic' ? acPct : tier === 'student' ? stPct : 0;
+
         let feeStr;
         if (hasRgn) {
             const rawFee    = isLocal ? sess.fee_local : (isSAARC ? sess.fee_saarc : sess.fee_nonsaarc);
             const nativeCur = isLocal ? 'LKR' : 'USD';
-            let dispFee = rawFee;
+            const discRaw   = discPct > 0 ? Math.round(rawFee * (1 - discPct / 100)) : rawFee;
+            let dispFee     = discRaw;
+            let dispFeeOrig = rawFee;
             if (nativeCur !== dispCur) {
-                dispFee = dispCur === 'LKR' ? Math.round(rawFee * fxRate) : Math.round(rawFee / fxRate);
+                dispFee     = dispCur === 'LKR' ? Math.round(discRaw * fxRate) : Math.round(discRaw / fxRate);
+                dispFeeOrig = dispCur === 'LKR' ? Math.round(rawFee  * fxRate) : Math.round(rawFee  / fxRate);
             }
-            feeStr = `${dispCur} ${dispFee.toLocaleString('en-US')}`;
+            const strike = discPct > 0
+                ? `<span style="text-decoration:line-through;opacity:0.4;font-size:0.78rem;margin-right:4px;">${dispCur} ${dispFeeOrig.toLocaleString('en-US')}</span>` : '';
+            feeStr = `${strike}<span style="color:${discPct > 0 ? '#4ade80' : 'var(--accent)'};">${dispCur} ${dispFee.toLocaleString('en-US')}</span>`;
         } else {
-            feeStr = `LKR ${sess.fee_local.toLocaleString('en-US')} / USD ${sess.fee_saarc}`;
+            const rawL = sess.fee_local;
+            const rawS = sess.fee_saarc;
+            const dL   = discPct > 0 ? Math.round(rawL * (1 - discPct / 100)) : rawL;
+            const dS   = discPct > 0 ? Math.round(rawS * (1 - discPct / 100)) : rawS;
+            feeStr = `LKR ${dL.toLocaleString('en-US')} / USD ${dS}`;
         }
+        const tierBadge = discPct > 0
+            ? `<span style="font-size:0.7rem;background:rgba(74,222,128,0.15);color:#4ade80;border-radius:3px;padding:1px 5px;margin-left:6px;">${discPct}% off</span>` : '';
+
         rows += `<tr style="border-top:1px solid rgba(197,215,58,0.12);">
-            <td style="padding:6px 8px 6px 0;color:var(--text-light);">${sess.name}</td>
-            <td style="text-align:right;padding:6px 0;color:var(--accent);font-weight:500;white-space:nowrap;">${feeStr}</td>
+            <td style="padding:6px 8px 6px 0;color:var(--text-light);">${sess.name}${tierBadge}</td>
+            <td style="text-align:right;padding:6px 0;font-weight:500;white-space:nowrap;">${feeStr}</td>
         </tr>`;
     });
 
     const note = !hasRgn
-        ? `<tr><td colspan="2" style="padding:5px 0 0;font-size:0.73rem;color:var(--text-muted);">Shown as Local (LKR) / SAARC &amp; Non-SAARC (USD). Select your region above for a single price.</td></tr>`
+        ? `<tr><td colspan="2" style="padding:5px 0 0;font-size:0.73rem;color:var(--text-muted);">Shown as Local (LKR) / SAARC & Non-SAARC (USD). Select your region above for a single price.</td></tr>`
         : '';
 
     el.innerHTML = `<div style="margin-bottom:16px;padding:12px 16px;background:rgba(197,215,58,0.04);border:1px solid rgba(197,215,58,0.18);border-radius:8px;">
@@ -825,7 +872,6 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
         </table>
     </div>`;
 }
-
 function updateInaugurationLabel(isLocal, hasRgn) {
     const span = document.getElementById('inauguration-fee-label');
     if (!span) return;
@@ -956,16 +1002,21 @@ function calculateTotalFee() {
 
     // Pre-conference sessions — only when Pre-Conference toggle is active
     if (isPreConf) {
+        const wkTier = document.getElementById('workshopDiscountTier')?.value || 'regular';
         document.querySelectorAll('.preconf-session-check').forEach(chk => {
             if (chk.checked) {
                 const sessId = chk.dataset.sessId;
                 const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === sessId);
                 if (sess) {
-                    const rawFee = effectivelyLocal ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                    const rawFee    = effectivelyLocal ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
                     const nativeCur2 = effectivelyLocal ? 'LKR' : 'USD';
-                    const disp = toDisplay(rawFee, nativeCur2);
+                    const discPct   = wkTier === 'academic' ? (sess.academic_discount_pct || 0)
+                                    : wkTier === 'student'  ? (sess.student_discount_pct  || 0) : 0;
+                    const effFee    = discPct > 0 ? Math.round(rawFee * (1 - discPct / 100)) : rawFee;
+                    const disp = toDisplay(effFee, nativeCur2);
                     displayTotal += disp;
-                    br(); breakdownText += `<span>Workshop — ${sess.name}:</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
+                    const tierTag = discPct > 0 ? ` [${wkTier}, ${discPct}% off]` : '';
+                    br(); breakdownText += `<span>Workshop — ${sess.name}${tierTag}:</span><span>${disp.toLocaleString('en-US')} ${displayCur}</span>`;
                 }
             }
         });
@@ -1037,6 +1088,7 @@ function collectFormData(refId) {
         if (sess) selectedSessionNames.push(sess.name);
     });
     dataObj['PreConf_Sessions'] = selectedSessionNames.join(', ');
+    dataObj['Workshop_Discount_Tier'] = document.getElementById('workshopDiscountTier')?.value || 'regular';
 
     return dataObj;
 }
@@ -1197,6 +1249,18 @@ function populateFormFromData(data) {
         paymentProofPreviouslyUploaded = true;
         updatePaymentProofUI();
     }
+    // Restore workshop discount tier
+    if (data.Workshop_Discount_Tier && data.Workshop_Discount_Tier !== 'regular') {
+        const wkSel = document.getElementById('workshopDiscountTier');
+        if (wkSel) {
+            wkSel.value = data.Workshop_Discount_Tier;
+            document.getElementById('workshop-id-upload-section')?.classList.remove('hidden');
+        }
+    }
+    if (data.Workshop_ID_Base64 === '(uploaded — see folder)') {
+        workshopIdPreviouslyUploaded = true;
+        showUploadedStatus('workshopId', 'Workshop ID previously uploaded');
+    }
 
     // Make loaded registration data available to the WhatsApp widget paper picker.
     // Without this, gatherWaContext() falls back to reading DOM fields which may not yet
@@ -1230,6 +1294,30 @@ async function handleFormSubmit(e) {
 
     const studentIdInput = document.getElementById('studentId');
     if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+
+    // Workshop discount ID validation
+    const workshopTier = document.getElementById('workshopDiscountTier')?.value || 'regular';
+    const isPreConfActive = document.getElementById('togglePreConf')?.checked || false;
+    const workshopIdInput = document.getElementById('workshopId');
+    if (isPreConfActive && (workshopTier === 'academic' || workshopTier === 'student')) {
+        // Student tier: existing conference Student ID counts as proof — no re-upload needed
+        const studentIdAlreadyHave = !!studentIdInput?.files[0] || workshopIdPreviouslyUploaded
+            || document.getElementById('student-id-status-badge') !== null;
+        const workshopIdHave = !!workshopIdInput?.files[0] || workshopIdPreviouslyUploaded;
+        if (workshopTier === 'student' && studentIdAlreadyHave) {
+            // reuse conference student ID — no extra upload required
+        } else if (!workshopIdHave) {
+            showToast(workshopTier === 'academic'
+                ? 'Please upload your Academic ID to claim the academic discount.'
+                : 'Please upload your Student ID to claim the student discount.', 'error');
+            workshopIdInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>Submit Registration</span><i class="bx bx-right-arrow-alt"></i>';
+            return;
+        }
+    }
+    if (workshopIdInput?.files[0]) dataObj['Workshop_ID_Base64'] = await fileToBase64(workshopIdInput.files[0]);
+
     dataObj['Payment_Proof_Base64'] = await Promise.all(paymentProofFiles.map(f => fileToBase64(f)));
 
     const submitBtn = document.getElementById('btn-submit');
@@ -1251,6 +1339,10 @@ async function handleFormSubmit(e) {
     paymentProofFiles = [];
     paymentProofPreviouslyUploaded = false;
     updatePaymentProofUI();
+    workshopIdPreviouslyUploaded = false;
+    const _wkTierEl = document.getElementById('workshopDiscountTier');
+    if (_wkTierEl) _wkTierEl.value = 'regular';
+    document.getElementById('workshop-id-upload-section')?.classList.add('hidden');
     document.querySelectorAll('.section-toggle').forEach(t => t.dispatchEvent(new Event('change')));
     const refEl = document.getElementById('reg-ref-id');
     if (refEl) refEl.textContent = '—';
@@ -1427,12 +1519,17 @@ function generateInvoice() {
 
     // Pre-conference sessions — only when Pre-Conference toggle is active
     if (isPreConf) {
+        const invWkTier = document.getElementById('workshopDiscountTier')?.value || 'regular';
         document.querySelectorAll('.preconf-session-check').forEach(chk => {
             if (chk.checked) {
                 const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
                 if (sess) {
-                    const rawFee = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
-                    addItem(`Pre-Conference Workshop — ${sess.name}`, rawFee, isLocalInv ? 'LKR' : 'USD');
+                    const rawFee  = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
+                    const dPct    = invWkTier === 'academic' ? (sess.academic_discount_pct || 0)
+                                  : invWkTier === 'student'  ? (sess.student_discount_pct  || 0) : 0;
+                    const effFee  = dPct > 0 ? Math.round(rawFee * (1 - dPct / 100)) : rawFee;
+                    const tierLbl = dPct > 0 ? ` [${invWkTier} rate, ${dPct}% off]` : '';
+                    addItem(`Pre-Conference Workshop — ${sess.name}${tierLbl}`, effFee, isLocalInv ? 'LKR' : 'USD');
                 }
             }
         });
@@ -1888,6 +1985,8 @@ function updateAdminDashboard() {
     statTotal.textContent = total;
     statMain.textContent  = mainCount;
     statAward.textContent = awardExc;
+    const workshopCount = submissions.filter(s => s.Registration_Type && s.Registration_Type.includes('Pre-Conference')).length;
+    set('stat-workshops', workshopCount);
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('stat-local',         localCount);
     set('stat-saarc',         saarcCount);
@@ -1956,24 +2055,47 @@ function renderOverviewTab() {
     set('dash-regtype-breakdown',  buildBreakdown(submissions, 'Registration_Type'));
     set('dash-status-breakdown',   buildBreakdown(submissions, 'Status'));
 
-    // Sessions: parse comma-separated session names stored in Additional_Info or use Registration_Type
-    // Sessions are stored as pre-conference inclusions — we count unique session references in any field
+    // Pre-conference workshop breakdown — per session, with region + discount tier sub-counts
     const sessionCounts = {};
     (appSettings.pre_conference_sessions || []).forEach(sess => {
         submissions.forEach(sub => {
             if ((sub.PreConf_Sessions || '').includes(sess.name)) {
-                sessionCounts[sess.name] = (sessionCounts[sess.name] || 0) + 1;
+                if (!sessionCounts[sess.name]) sessionCounts[sess.name] = { total: 0, byRegion: {}, byTier: {} };
+                sessionCounts[sess.name].total++;
+                const rgn  = sub.Attendee_Region || 'Unknown';
+                const tier = sub.Workshop_Discount_Tier || 'regular';
+                sessionCounts[sess.name].byRegion[rgn]  = (sessionCounts[sess.name].byRegion[rgn]  || 0) + 1;
+                sessionCounts[sess.name].byTier[tier]   = (sessionCounts[sess.name].byTier[tier]   || 0) + 1;
             }
         });
     });
-    const sessEntries = Object.entries(sessionCounts).sort((a,b) => b[1]-a[1]);
-    const sessHtml = sessEntries.length === 0
-        ? '<p style="color:var(--text-muted);font-size:0.85rem;">No pre-conference workshop data yet.</p>'
-        : `<table class="dash-breakdown-table"><tbody>` +
-          sessEntries.map(([n, c]) =>
-            `<tr><td class="bk-label">${escHtml(n)}</td><td class="bk-count">${c} attendees</td>
-             <td class="bk-bar-cell"><div class="dash-bar"><div class="dash-bar-fill" style="width:${Math.round((c/submissions.length)*100)}%"></div></div></td></tr>`
-          ).join('') + `</tbody></table>`;
+    const sessEntries = Object.entries(sessionCounts).sort((a,b) => b[1].total - a[1].total);
+
+    let sessHtml;
+    if (!sessEntries.length) {
+        sessHtml = '<p style="color:var(--text-muted);font-size:0.85rem;">No pre-conference workshop data yet.</p>';
+    } else {
+        const tierColors = { regular: 'var(--text-muted)', academic: '#4a9eff', student: '#4ade80' };
+        const tierLabels = { regular: 'Regular', academic: 'Academic', student: 'Student' };
+        sessHtml = `<table class="dash-breakdown-table"><tbody>` +
+            sessEntries.map(([name, data]) => {
+                const subRows = Object.entries(data.byRegion).map(([r,c]) =>
+                    `<span style="color:var(--text-muted);font-size:0.78rem;margin-right:8px;">${r}: ${c}</span>`
+                ).join('');
+                const tierRows = Object.entries(data.byTier).map(([t,c]) =>
+                    `<span style="color:${tierColors[t] || 'var(--text-muted)'};font-size:0.78rem;margin-right:8px;">${tierLabels[t] || t}: ${c}</span>`
+                ).join('');
+                return `<tr>
+                    <td class="bk-label">
+                        <div>${escHtml(name)}</div>
+                        <div style="margin-top:2px;">${subRows}</div>
+                        <div style="margin-top:2px;">${tierRows}</div>
+                    </td>
+                    <td class="bk-count">${data.total} attendees</td>
+                    <td class="bk-bar-cell"><div class="dash-bar"><div class="dash-bar-fill" style="width:${Math.round((data.total/submissions.length)*100)}%"></div></div></td>
+                </tr>`;
+            }).join('') + `</tbody></table>`;
+    }
     set('dash-sessions-breakdown', sessHtml);
 }
 
@@ -2826,19 +2948,23 @@ function addSessionField() {
 }
 
 function saveSessionsFromAdmin() {
-    const names  = document.querySelectorAll('#sessions-list .sess-name');
-    const locals  = document.querySelectorAll('#sessions-list .sess-fee-local');
-    const saarcs  = document.querySelectorAll('#sessions-list .sess-fee-saarc');
-    const nsaarcs = document.querySelectorAll('#sessions-list .sess-fee-nonsaarc');
+    const names       = document.querySelectorAll('#sessions-list .sess-name');
+    const locals      = document.querySelectorAll('#sessions-list .sess-fee-local');
+    const saarcs      = document.querySelectorAll('#sessions-list .sess-fee-saarc');
+    const nsaarcs     = document.querySelectorAll('#sessions-list .sess-fee-nonsaarc');
+    const academicPcts = document.querySelectorAll('#sessions-list .sess-academic-pct');
+    const studentPcts  = document.querySelectorAll('#sessions-list .sess-student-pct');
     const sessions = [];
     for (let i = 0; i < names.length; i++) {
         if (names[i].value.trim()) {
             sessions.push({
                 id: appSettings.pre_conference_sessions[i]?.id || 'sess_' + Date.now() + i,
                 name: names[i].value.trim(),
-                fee_local:    Number(locals[i].value)  || 0,
-                fee_saarc:    Number(saarcs[i].value)  || 0,
-                fee_nonsaarc: Number(nsaarcs[i].value) || 0
+                fee_local:            Number(locals[i].value)      || 0,
+                fee_saarc:            Number(saarcs[i].value)      || 0,
+                fee_nonsaarc:         Number(nsaarcs[i].value)     || 0,
+                academic_discount_pct: Number(academicPcts[i]?.value) || 0,
+                student_discount_pct:  Number(studentPcts[i]?.value)  || 0
             });
         }
     }
@@ -3037,6 +3163,13 @@ function mergeWithDefaults(stored) {
                 is_workshop_only: false,
                 ...cat,
                 paper_discount: 'paper_discount' in cat ? cat.paper_discount : (cat.is_student || false)
+            }));
+        } else if (key === 'pre_conference_sessions') {
+            // Migration: ensure discount pct fields exist in older stored sessions
+            base.pre_conference_sessions = (stored.pre_conference_sessions || []).map(sess => ({
+                academic_discount_pct: 0,
+                student_discount_pct:  0,
+                ...sess
             }));
         } else if (
             typeof base[key] === 'object' && base[key] !== null && !Array.isArray(base[key]) &&

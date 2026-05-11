@@ -168,6 +168,10 @@ function handleSubmitRegistration(data) {
     saveFileToFolder(userFolder, 'student_id_', data.Student_ID_Base64);
     data.Student_ID_Base64 = '(uploaded — see folder)';
   }
+  if (data.Workshop_ID_Base64 && data.Workshop_ID_Base64.data) {
+    saveFileToFolder(userFolder, 'workshop_id_', data.Workshop_ID_Base64);
+    data.Workshop_ID_Base64 = '(uploaded — see folder)';
+  }
   if (data.Payment_Proof_Base64) {
     const proofs = Array.isArray(data.Payment_Proof_Base64)
       ? data.Payment_Proof_Base64
@@ -281,7 +285,7 @@ function upsertMasterSheet(data, mainFolder, folderUrl) {
       'Primary_Reason', 'Primary_Reason_Other',
       'Excursion_Local_Count', 'Excursion_Foreign_Count',
       'Excursion_Mobility', 'Excursion_Activity',
-      'PreConf_Sessions',
+      'PreConf_Sessions', 'Workshop_Discount_Tier', 'Workshop_ID_File',
       'Address', 'Bill_To', 'Billing_Org_Name', 'Billing_Tax_ID',
       'Billing_Address', 'Billing_Finance_Email',
       'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL'
@@ -340,6 +344,8 @@ function buildRow(headers, data, folderUrl) {
     Excursion_Mobility:    data.Excursion_Mobility     || '',
     Excursion_Activity:    data.Excursion_Activity     || '',
     PreConf_Sessions:      data.PreConf_Sessions       || '',
+    Workshop_Discount_Tier: data.Workshop_Discount_Tier || 'regular',
+    Workshop_ID_File:      data.Workshop_ID_Base64     || '',
     Address:               data.Address                || '',
     Bill_To:               data.Bill_To                || '',
     Billing_Org_Name:      data.Billing_Org_Name       || '',

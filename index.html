@@ -271,6 +271,30 @@
                         <div id="preconf-sessions-section" class="hidden">
                             <div id="preconf-sessions-container"></div>
                         </div>
+
+                        <!-- Workshop Discount Tier — shown when Pre-Conference Workshops toggle is active -->
+                        <div id="workshop-discount-section" class="hidden" style="margin-top:20px;padding:16px 20px;background:rgba(74,222,128,0.04);border:1px solid rgba(74,222,128,0.2);border-radius:var(--card-radius);">
+                            <h4 style="margin:0 0 6px;color:var(--text-light);font-size:0.92rem;display:flex;align-items:center;gap:8px;">
+                                <i class='bx bx-badge-check' style="color:#4ade80;font-size:1.1rem;"></i>Workshop Discount Tier
+                            </h4>
+                            <p style="color:var(--text-muted);font-size:0.84rem;margin:0 0 14px;">Academics and students are eligible for a reduced workshop fee. Select your tier below — you may need to upload a valid ID to verify eligibility.</p>
+                            <div class="form-group row">
+                                <div class="input-field col">
+                                    <label for="workshopDiscountTier">Discount Tier</label>
+                                    <select id="workshopDiscountTier" name="Workshop_Discount_Tier" class="price-trigger">
+                                        <option value="regular">Regular (Standard Rate)</option>
+                                        <option value="academic">Academic (Reduced Rate)</option>
+                                        <option value="student">Student (Reduced Rate)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="workshop-id-upload-section" class="form-group upload-group hidden">
+                                <label for="workshopId">Upload Valid Academic / Student ID <span class="required">*</span></label>
+                                <input type="file" id="workshopId" name="Workshop_ID_File" accept="image/*,.pdf">
+                                <small class="helper-text">Required to verify your discount eligibility. Max 5MB (JPEG, PNG, PDF). <em>Note: students who already uploaded a Student ID for the Main Conference do not need to re-upload here.</em></small>
+                                <div id="workshop-id-status"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 3. Excellence Award -->
@@ -687,6 +711,7 @@
                     <div class="stat-card"><i class='bx bx-award'></i><div class="stat-info"><h4 id="stat-award">0</h4><span>Awards / Excursions</span></div></div>
                     <div class="stat-card"><i class='bx bx-book-content'></i><div class="stat-info"><h4 id="stat-papers">0</h4><span>Papers Submitted</span></div></div>
                     <div class="stat-card"><i class='bx bx-bus'></i><div class="stat-info"><h4 id="stat-excursion-pax">0</h4><span>Excursion Pax</span></div></div>
+                    <div class="stat-card"><i class='bx bx-calendar-event'></i><div class="stat-info"><h4 id="stat-workshops">0</h4><span>Workshop Reg.</span></div></div>
                 </div>
 
                 <!-- Dashboard Tabs -->
@@ -1008,7 +1033,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=65"></script>
+    <script src="app.js?v=66"></script>
 </body>
 
 </html>
