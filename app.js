@@ -306,7 +306,6 @@ function setupEventListeners() {
             if (tier === 'academic' || tier === 'student') uploadSec.classList.remove('hidden');
             else uploadSec.classList.add('hidden');
         }
-        _updatePreconfSessionFeeLabels();
         calculateTotalFee();
     });
 
@@ -635,7 +634,6 @@ function updateCostPreviews() {
     _previewApcJournals(hasRgn, dispCur, toDisp);
     _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur);
     updateInaugurationLabel(isLocal, hasRgn);
-    _updatePreconfSessionFeeLabels();
     _updateWorkshopDiscountVisibility();
 }
 
@@ -917,48 +915,6 @@ function _updateWorkshopDiscountVisibility() {
 }
 
 // Update per-session fee labels inline with each checkbox based on current region + discount tier
-function _updatePreconfSessionFeeLabels() {
-    const region  = document.getElementById('attendeeRegion')?.value || '';
-    const isLocal = region === 'Local';
-    const isSAARC = region === 'SAARC';
-    const hasRgn  = !!region;
-    const tier    = document.getElementById('workshopDiscountTier')?.value || 'regular';
-
-    document.querySelectorAll('.preconf-sess-fee').forEach(span => {
-        const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === span.dataset.sessId);
-        if (!sess) { span.innerHTML = ''; return; }
-
-        const acPct   = sess.academic_discount_pct || 0;
-        const stPct   = sess.student_discount_pct  || 0;
-        const discPct = tier === 'academic' ? acPct : tier === 'student' ? stPct : 0;
-
-        if (hasRgn) {
-            const rawFee = isLocal ? sess.fee_local : (isSAARC ? sess.fee_saarc : sess.fee_nonsaarc);
-            const cur    = isLocal ? 'LKR' : 'USD';
-            if (discPct > 0) {
-                const discFee = Math.round(rawFee * (1 - discPct / 100));
-                span.innerHTML = `— <del style="opacity:0.4;">${cur} ${rawFee.toLocaleString('en-US')}</del> <strong style="color:#4ade80;">${cur} ${discFee.toLocaleString('en-US')}</strong> <em style="font-size:0.72rem;color:#4ade80;">(${discPct}% off)</em>`;
-            } else {
-                span.innerHTML = `— <span style="color:var(--accent);">${cur} ${rawFee.toLocaleString('en-US')}</span>`;
-            }
-        } else {
-            const rawL = sess.fee_local;
-            const rawS = sess.fee_saarc;
-            const rawN = sess.fee_nonsaarc;
-            if (discPct > 0) {
-                const dL = Math.round(rawL * (1 - discPct / 100));
-                const dS = Math.round(rawS * (1 - discPct / 100));
-                const dN = Math.round(rawN * (1 - discPct / 100));
-                const usdPart = rawS === rawN ? `USD ${dS.toLocaleString('en-US')}` : `USD ${dS.toLocaleString('en-US')}/${dN.toLocaleString('en-US')}`;
-                span.innerHTML = `— <del style="opacity:0.4;">LKR ${rawL.toLocaleString('en-US')}</del> <strong style="color:#4ade80;">LKR ${dL.toLocaleString('en-US')} / ${usdPart}</strong>`;
-            } else {
-                const usdPart = rawS === rawN ? `USD ${rawS.toLocaleString('en-US')}` : `USD ${rawS.toLocaleString('en-US')}/${rawN.toLocaleString('en-US')}`;
-                span.innerHTML = `— <span style="color:var(--text-muted);font-size:0.82rem;">LKR ${rawL.toLocaleString('en-US')} / ${usdPart}</span>`;
-            }
-        }
-    });
-}
-
 function calculateTotalFee() {
     updateCostPreviews();
 
@@ -3058,18 +3014,11 @@ function rebuildSessionCheckboxes() {
     container.closest('#preconf-sessions-section')?.classList.remove('hidden');
     container.innerHTML = '';
     sessions.forEach(sess => {
-        const hasDisc = (sess.academic_discount_pct || 0) > 0 || (sess.student_discount_pct || 0) > 0;
-        const discHint = hasDisc
-            ? `<span style="font-size:0.72rem;background:rgba(74,222,128,0.12);color:#4ade80;border-radius:3px;padding:1px 5px;margin-left:5px;vertical-align:middle;">discount available</span>`
-            : '';
         const div = document.createElement('div');
         div.className = 'form-checkbox mb-2';
         div.innerHTML = `
             <input type="checkbox" id="sess_${sess.id}" name="PreConf_${sess.id}" class="preconf-session-check price-trigger" data-sess-id="${sess.id}">
-            <label for="sess_${sess.id}" style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;">
-                <span>${sess.name}${discHint}</span>
-                <span class="preconf-sess-fee" data-sess-id="${sess.id}" style="font-weight:400;"></span>
-            </label>
+            <label for="sess_${sess.id}">${sess.name}</label>
         `;
         container.appendChild(div);
     });
@@ -3086,7 +3035,6 @@ function rebuildSessionCheckboxes() {
             calculateTotalFee();
         });
     });
-    _updatePreconfSessionFeeLabels();
 }
 
 // ---- AWARD & EXCURSION DROPDOWN REBUILDERS ----
