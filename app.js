@@ -44,7 +44,7 @@ const defaultSettings = {
 };
 
 // ---- GOOGLE DRIVE CONFIGURATION ----
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzstd5s2cjkTq0mMptPHdUGbLzmgSROZ_rB8EYq7PlS24b_JOdU1NappJBgYQQiuvDu/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCfXzpVmHaW5PoFD5eVU-sD_xewMvczVoHZAURx2DjVpBxY255rzFxsjf4czJbvpC8/exec';
 const ADMIN_KEY = 'sicet2026admin';
 
 // ---- SUPER ADMIN CREDENTIALS ----
