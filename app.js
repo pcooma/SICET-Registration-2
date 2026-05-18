@@ -98,6 +98,7 @@ let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
 let paymentProofFiles = []; // Managed array for multi-file proof of payment upload
 let paymentProofPreviouslyUploaded = false; // true when loaded record already has proof on server
 let workshopIdPreviouslyUploaded = false; // true when loaded record already has workshop ID on server
+let isZeroFeeRegistration = false; // true when calculated grand total is 0 (e.g. 100% student discount)
 
 // Initialize
 async function init() {
@@ -1084,6 +1085,9 @@ function calculateTotalFee() {
     priceCurrency.textContent = displayCur;
     priceTotalAmount.textContent = displayTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     priceBreakdown.innerHTML = breakdownText;
+
+    // Update Step 1 UI whenever the total changes so free-registration flows are clear
+    _updateStep1ForFreeReg(displayTotal === 0 && !!displayCur);
 }
 
 
@@ -1305,7 +1309,7 @@ function populateFormFromData(data) {
 async function handleFormSubmit(e) {
     e.preventDefault();
 
-    if (paymentProofFiles.length === 0) {
+    if (!isZeroFeeRegistration && paymentProofFiles.length === 0 && !paymentProofPreviouslyUploaded) {
         showToast('Please upload your proof of payment before submitting.', 'error');
         document.getElementById('paymentProof').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -1367,6 +1371,13 @@ async function handleFormSubmit(e) {
     paymentProofPreviouslyUploaded = false;
     updatePaymentProofUI();
     workshopIdPreviouslyUploaded = false;
+    isZeroFeeRegistration = false;
+    document.getElementById('step2-free-notice')?.remove();
+    document.getElementById('step1-free-notice')?.remove();
+    const _payBox = document.getElementById('step2-section')?.querySelector('.highlight-box');
+    if (_payBox) _payBox.style.display = '';
+    const _proofRow = document.getElementById('paymentProof')?.closest('.form-group.row');
+    if (_proofRow) _proofRow.style.display = '';
     const _wkTierEl = document.getElementById('workshopDiscountTier');
     if (_wkTierEl) _wkTierEl.value = 'regular';
     document.getElementById('workshop-id-upload-section')?.classList.add('hidden');
@@ -1590,6 +1601,9 @@ function generateInvoice() {
         return;
     }
 
+    const isFreeReg = grandTotal === 0;
+    isZeroFeeRegistration = isFreeReg;
+
     // ---- 3. PDF Drawing (B&W, professional — targets 1 A4 page) ----
     const L = 14;
     const R = 196;
@@ -1700,83 +1714,101 @@ function generateInvoice() {
     Y += 12;
     doc.setTextColor(0, 0, 0);
 
-    // --- BANK DETAILS (de-emphasised — supporting information) ---
-    Y += 4;
-    const bankBoxH = 27;
-    if (Y + bankBoxH > 278) { doc.addPage(); Y = 14; }
-    doc.setFillColor(252, 252, 252); doc.setDrawColor(175, 175, 175); doc.setLineWidth(0.25);
-    doc.rect(L, Y, W, bankBoxH, 'FD');
+    if (isFreeReg) {
+        // --- FREE REGISTRATION NOTICE (replaces bank details + payment sections) ---
+        Y += 6;
+        const freeBoxH = 16;
+        if (Y + freeBoxH > 278) { doc.addPage(); Y = 14; }
+        doc.setFillColor(240, 255, 245); doc.setDrawColor(80, 160, 100); doc.setLineWidth(0.4);
+        doc.rect(L, Y, W, freeBoxH, 'FD');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(30, 110, 50);
+        doc.text('NO PAYMENT REQUIRED', L + 4, Y + 7);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 120, 60);
+        doc.text('Your selected registration is at no cost. Please proceed to submit your registration online.', L + 4, Y + 13);
+        Y += freeBoxH + 6;
 
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
-    doc.text('BANK TRANSFER DETAILS', L + 4, Y + 5);
+        // System-generated notice
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+        doc.text('This document is system-generated and confirms your free registration.', L, Y);
+    } else {
+        // --- BANK DETAILS (de-emphasised — supporting information) ---
+        Y += 4;
+        const bankBoxH = 27;
+        if (Y + bankBoxH > 278) { doc.addPage(); Y = 14; }
+        doc.setFillColor(252, 252, 252); doc.setDrawColor(175, 175, 175); doc.setLineWidth(0.25);
+        doc.rect(L, Y, W, bankBoxH, 'FD');
 
-    const bY = Y + 10;
-    const c1 = L + 4, c2 = L + 30, c3 = L + 97, c4 = L + 121;
-    const bankLeft = [['Bank:', 'Sampath Bank PLC'], ['Account Name:', 'Sri Lanka Institute of Information Technology (Gte) Ltd.'], ['Branch:', 'Malabe Branch']];
-    const bankRight = [['Account No:', '003910003002'], ['SWIFT / BIC:', 'BSAMLKLX']];
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
+        doc.text('BANK TRANSFER DETAILS', L + 4, Y + 5);
 
-    doc.setFontSize(7.5);
-    bankLeft.forEach(([lbl, val], i) => {
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(70, 70, 70); doc.text(lbl, c1, bY + i * 4.8);
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.text(val, c2, bY + i * 4.8);
-    });
-    bankRight.forEach(([lbl, val], i) => {
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(70, 70, 70); doc.text(lbl, c3, bY + i * 4.8);
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.text(val, c4, bY + i * 4.8);
-    });
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(110, 110, 110);
-    doc.text(`* Use your Reference ID "${invoiceNum}" as the payment reference / description.`, L + 4, Y + bankBoxH - 3);
+        const bY = Y + 10;
+        const c1 = L + 4, c2 = L + 30, c3 = L + 97, c4 = L + 121;
+        const bankLeft = [['Bank:', 'Sampath Bank PLC'], ['Account Name:', 'Sri Lanka Institute of Information Technology (Gte) Ltd.'], ['Branch:', 'Malabe Branch']];
+        const bankRight = [['Account No:', '003910003002'], ['SWIFT / BIC:', 'BSAMLKLX']];
 
-    Y += bankBoxH + 4;
+        doc.setFontSize(7.5);
+        bankLeft.forEach(([lbl, val], i) => {
+            doc.setFont('helvetica', 'bold'); doc.setTextColor(70, 70, 70); doc.text(lbl, c1, bY + i * 4.8);
+            doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.text(val, c2, bY + i * 4.8);
+        });
+        bankRight.forEach(([lbl, val], i) => {
+            doc.setFont('helvetica', 'bold'); doc.setTextColor(70, 70, 70); doc.text(lbl, c3, bY + i * 4.8);
+            doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30); doc.text(val, c4, bY + i * 4.8);
+        });
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(110, 110, 110);
+        doc.text(`* Use your Reference ID "${invoiceNum}" as the payment reference / description.`, L + 4, Y + bankBoxH - 3);
 
-    // --- FOOTER ---
-    const paymentUrl = 'https://pay.sliit.lk/';
-    const refundDeadline = appSettings.refund_deadline || 'August 23, 2025';
+        Y += bankBoxH + 4;
 
-    if (Y + 50 > 278) { doc.addPage(); Y = 14; }
+        // --- FOOTER ---
+        const paymentUrl = 'https://pay.sliit.lk/';
+        const refundDeadline = appSettings.refund_deadline || 'August 23, 2025';
 
-    // Payment gateway
-    doc.setFillColor(245, 245, 245); doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.3);
-    doc.rect(L, Y, W, 12, 'FD');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(0, 0, 0);
-    doc.text('Online Payment via SLIIT Gateway:', L + 4, Y + 5);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text(paymentUrl, L + 4, Y + 9.5);
-    doc.link(L + 4, Y + 6, 52, 4.5, { url: paymentUrl });
-    Y += 16;
+        if (Y + 50 > 278) { doc.addPage(); Y = 14; }
 
-    // System-generated notice (replaces signature block)
-    Y += 2;
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-    doc.text('This invoice is system-generated. No signature is required.', L, Y);
-    Y += 7;
+        // Payment gateway
+        doc.setFillColor(245, 245, 245); doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.3);
+        doc.rect(L, Y, W, 12, 'FD');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(0, 0, 0);
+        doc.text('Online Payment via SLIIT Gateway:', L + 4, Y + 5);
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+        doc.text(paymentUrl, L + 4, Y + 9.5);
+        doc.link(L + 4, Y + 6, 52, 4.5, { url: paymentUrl });
+        Y += 16;
 
-    // Payment notes
-    doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.2);
-    doc.line(L, Y, R, Y);
-    Y += 4;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(30, 30, 30);
-    doc.text('Payment Notes', L, Y);
-    Y += 4.5;
+        // System-generated notice (replaces signature block)
+        Y += 2;
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
+        doc.text('This invoice is system-generated. No signature is required.', L, Y);
+        Y += 7;
 
-    const notes = [
-        'Direct Deposit (USD): Recommended for international participants. Transfer to Sampath Bank PLC via SWIFT (BSAMLKLX), Account No. 003910003002.',
-        'Wire Transfer (LKR): Use the same Sampath Bank account. Recommended for participants with Sri Lankan banking access.',
-        'Debit/Credit Card (LKR): Pay via the SLIIT Payment Gateway (pay.sliit.lk). A 1.5% bank service charge applies.',
-        `Refund Policy: Requests must be sent to sicet@sliit.lk by ${refundDeadline}. Admin fee: US$20.`
-    ];
+        // Payment notes
+        doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.2);
+        doc.line(L, Y, R, Y);
+        Y += 4;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(30, 30, 30);
+        doc.text('Payment Notes', L, Y);
+        Y += 4.5;
 
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(60, 60, 60);
-    notes.forEach((note, i) => {
-        const nLines = doc.splitTextToSize(`${i + 1}. ${note}`, W - 2);
-        if (Y + (nLines.length * 4) > 278) { doc.addPage(); Y = 14; }
-        doc.text(nLines, L, Y);
-        Y += (nLines.length * 4) + 1;
-    });
+        const notes = [
+            'Direct Deposit (USD): Recommended for international participants. Transfer to Sampath Bank PLC via SWIFT (BSAMLKLX), Account No. 003910003002.',
+            'Wire Transfer (LKR): Use the same Sampath Bank account. Recommended for participants with Sri Lankan banking access.',
+            'Debit/Credit Card (LKR): Pay via the SLIIT Payment Gateway (pay.sliit.lk). A 1.5% bank service charge applies.',
+            `Refund Policy: Requests must be sent to sicet@sliit.lk by ${refundDeadline}. Admin fee: US$20.`
+        ];
 
-    Y += 2;
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(150, 150, 150);
-    doc.text('This is a Proforma Invoice — not a tax invoice. Payment confirms registration.', L, Y);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(60, 60, 60);
+        notes.forEach((note, i) => {
+            const nLines = doc.splitTextToSize(`${i + 1}. ${note}`, W - 2);
+            if (Y + (nLines.length * 4) > 278) { doc.addPage(); Y = 14; }
+            doc.text(nLines, L, Y);
+            Y += (nLines.length * 4) + 1;
+        });
+
+        Y += 2;
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+        doc.text('This is a Proforma Invoice — not a tax invoice. Payment confirms registration.', L, Y);
+    }
 
     const safeName = fullName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'attendee';
     const pdfFileName = `SICET2026_Invoice_${invoiceNum}_${safeName}.pdf`;
@@ -1787,7 +1819,7 @@ function generateInvoice() {
         (async () => {
             try {
                 const dataObj = collectFormData(refId);
-                dataObj.Status = 'Pending Payment';
+                dataObj.Status = isFreeReg ? 'Submitted' : 'Pending Payment';
                 const studentIdInput = document.getElementById('studentId');
                 if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
                 await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataObj) });
@@ -1795,11 +1827,13 @@ function generateInvoice() {
         })();
     }
 
-    // Reveal Step 2 and scroll to ref ID box
-    const step2 = document.getElementById('step2-section');
-    if (step2) step2.classList.remove('hidden');
+    // Reveal Step 2 (configured for free or paid flow) and scroll into view
+    _setupStep2(isFreeReg);
     document.querySelector('.payment-section.mt-4')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    showToast(`Invoice downloaded! Reference ID: ${refId} — please save this!`, 'success');
+    const toastMsg = isFreeReg
+        ? `Confirmation downloaded! Reference ID: ${refId} — no payment needed, just submit below.`
+        : `Invoice downloaded! Reference ID: ${refId} — please save this!`;
+    showToast(toastMsg, 'success');
 }
 
 // ---- DRAFT (AUTO-SAVE) LOGIC ----
@@ -2798,7 +2832,8 @@ async function loadFromGoogleDrive() {
 function updateSubmitButtonState() {
     const submitBtn = document.getElementById('btn-submit');
     const submitNote = document.getElementById('submit-payment-note');
-    const hasProof = paymentProofFiles.length > 0 || paymentProofPreviouslyUploaded;
+    // Free registrations need no payment proof — allow submission directly
+    const hasProof = isZeroFeeRegistration || paymentProofFiles.length > 0 || paymentProofPreviouslyUploaded;
 
     if (hasProof) {
         submitBtn.classList.remove('btn-blocked');
@@ -2807,6 +2842,64 @@ function updateSubmitButtonState() {
         submitBtn.classList.add('btn-blocked');
         if (submitNote) submitNote.style.display = 'block';
     }
+}
+
+// Update Step 1 payment instructions and invoice button label when total fee is 0
+function _updateStep1ForFreeReg(isFree) {
+    const btn = document.getElementById('btn-download-invoice');
+    const existingNotice = document.getElementById('step1-free-notice');
+
+    if (isFree) {
+        if (btn) {
+            btn.innerHTML = `<i class='bx bx-check-circle'></i> Get Registration Confirmation &amp; Reference ID`;
+        }
+        if (!existingNotice) {
+            const wrapper = document.getElementById('invoice-download-wrapper');
+            if (wrapper) {
+                const notice = document.createElement('div');
+                notice.id = 'step1-free-notice';
+                notice.style.cssText = 'margin-bottom:12px;padding:12px 16px;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;';
+                notice.innerHTML = `<i class='bx bx-check-shield' style="font-size:1.4rem;color:#4ade80;flex-shrink:0;"></i><div><div style="color:#4ade80;font-weight:600;font-size:0.92rem;">No Payment Required</div><div style="color:var(--text-muted);font-size:0.84rem;margin-top:2px;">Your selected registration is at no cost. Download your confirmation, then submit below.</div></div>`;
+                wrapper.insertAdjacentElement('beforebegin', notice);
+            }
+        }
+    } else {
+        if (btn) {
+            btn.innerHTML = `<i class='bx bxs-file-pdf'></i> Download Proforma Invoice &amp; Get Reference ID`;
+        }
+        existingNotice?.remove();
+    }
+}
+
+// Configure Step 2 section for free vs paid registration
+function _setupStep2(isFree) {
+    const step2 = document.getElementById('step2-section');
+    if (!step2) return;
+    step2.classList.remove('hidden');
+
+    const payBox   = step2.querySelector('.highlight-box');
+    const proofRow = document.getElementById('paymentProof')?.closest('.form-group.row');
+
+    if (isFree) {
+        if (payBox)   payBox.style.display   = 'none';
+        if (proofRow) proofRow.style.display = 'none';
+
+        if (!document.getElementById('step2-free-notice')) {
+            const formActions = step2.querySelector('.form-actions');
+            if (formActions) {
+                const notice = document.createElement('div');
+                notice.id = 'step2-free-notice';
+                notice.style.cssText = 'margin-bottom:16px;padding:14px 18px;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.3);border-radius:8px;';
+                notice.innerHTML = `<div style="display:flex;align-items:flex-start;gap:10px;"><i class='bx bx-check-shield' style="font-size:1.5rem;color:#4ade80;flex-shrink:0;margin-top:2px;"></i><div><div style="color:#4ade80;font-weight:700;font-size:0.95rem;margin-bottom:4px;">No Payment Required</div><div style="color:var(--text-muted);font-size:0.87rem;line-height:1.6;">Your selected workshop has a <strong style="color:var(--text-light);">100% student discount</strong> — there is nothing to pay. Click <strong style="color:var(--text-light);">Submit Registration</strong> below to complete your registration.</div></div></div>`;
+                formActions.insertAdjacentElement('beforebegin', notice);
+            }
+        }
+    } else {
+        if (payBox)   payBox.style.display   = '';
+        if (proofRow) proofRow.style.display = '';
+        document.getElementById('step2-free-notice')?.remove();
+    }
+    updateSubmitButtonState();
 }
 
 // ---- REFERENCE ID HELPERS ----
