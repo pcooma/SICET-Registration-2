@@ -81,6 +81,7 @@
                     <p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 12px;">Enter your Reference ID to reload your saved details, download your invoice, or upload your payment receipt.</p>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <input type="text" id="lookup-ref-id" placeholder="E.g. SICET2026-1234567" style="flex:1;min-width:180px;padding:9px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:var(--text-light);font-size:0.9rem;outline:none;">
+                        <input type="email" id="lookup-email" placeholder="Registration email" style="flex:1;min-width:200px;padding:9px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:var(--text-light);font-size:0.9rem;outline:none;">
                         <button type="button" id="btn-lookup-ref" class="btn btn-secondary btn-sm" style="white-space:nowrap;padding:9px 18px;">
                             <i class='bx bx-search'></i> Load Registration
                         </button>
@@ -153,10 +154,10 @@
                             <label for="attendeeCategory">Attendee Category <span class="required">*</span></label>
                             <select id="attendeeCategory" name="Attendee_Category" class="price-trigger" required>
                                 <option value="" disabled selected>Select Category</option>
-                                <option value="Student Author">Student Author</option>
-                                <option value="General Author">General Author</option>
-                                <option value="Student Participant">Student Participant</option>
-                                <option value="General Participant">General Participant</option>
+                                <option value="Author">Author</option>
+                                <option value="Non-Author">Non-Author</option>
+                                <option value="Student">Student</option>
+                                <option value="Workshop Attendee">Workshop Attendee</option>
                             </select>
                         </div>
                     </div>
@@ -458,8 +459,8 @@
                             <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:0.87rem;line-height:2;">
                                 <li><strong style="color:var(--text-light);">Direct Deposit (USD):</strong> Recommended for international participants. Bank transfer to Sampath Bank PLC, Malabe Branch — see bank details on your invoice.</li>
                                 <li><strong style="color:var(--text-light);">Wire Transfer (LKR):</strong> Recommended for participants with Sri Lankan banking access. Use the same Sampath Bank account details.</li>
-                                <li><strong style="color:var(--text-light);">Debit/Credit Card (LKR):</strong> Pay online via the SLIIT Payment Gateway. A 1.5% bank service charge applies. Exchange rate: 1 USD = 325 LKR (indicative).</li>
-                                <li><strong style="color:var(--text-light);">Refund Policy:</strong> All refund requests must be sent to <a href="mailto:sicet@sliit.lk" style="color:#4a9eff;">sicet@sliit.lk</a> by <span id="notice-refund-deadline">August 23, 2025</span>. An administrative fee of US$20 applies to all refunds.</li>
+                                <li><strong style="color:var(--text-light);">Debit/Credit Card (LKR):</strong> Pay online via the SLIIT Payment Gateway. A 1.5% bank service charge applies. Exchange rate: 1 USD = <span id="notice-exchange-rate">320</span> LKR (indicative).</li>
+                                <li><strong style="color:var(--text-light);">Refund Policy:</strong> All refund requests must be sent to <a href="mailto:sicet@sliit.lk" style="color:#4a9eff;">sicet@sliit.lk</a> by <span id="notice-refund-deadline">August 23, 2026</span>. An administrative fee of US$20 applies to all refunds.</li>
                             </ul>
                             <!-- Bank Details Summary -->
                             <div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:0.84rem;">
@@ -596,7 +597,8 @@
                     <p style="margin:0 0 4px;font-size:0.8rem;font-weight:600;color:var(--accent);letter-spacing:0.5px;text-transform:uppercase;">Already Registered?</p>
                     <p style="margin:0 0 12px;font-size:0.82rem;color:var(--text-muted);">Enter your Reference ID to auto-load your details into this form.</p>
                     <div style="display:flex;gap:8px;align-items:stretch;">
-                        <input type="text" id="wa-ref-lookup" placeholder="E.g. SICET2026-20250501120000" style="flex:1;font-size:0.85rem;font-family:monospace;" oninput="onWaRefInput()">
+                        <input type="text" id="wa-ref-lookup" placeholder="Reference ID" style="flex:1;font-size:0.85rem;font-family:monospace;" oninput="onWaRefInput()">
+                        <input type="email" id="wa-ref-email" placeholder="Registration email" style="flex:1;min-width:190px;font-size:0.85rem;">
                         <button type="button" id="btn-wa-load-ref" onclick="loadWaRegistration()"
                             style="display:inline-flex;align-items:center;gap:6px;padding:0 16px;background:rgba(197,215,58,0.1);border:1px solid rgba(197,215,58,0.35);border-radius:8px;color:var(--accent);font-weight:600;font-size:0.88rem;font-family:inherit;cursor:pointer;white-space:nowrap;">
                             <i class='bx bx-search'></i> Load
@@ -1003,7 +1005,7 @@
                             <div class="form-group">
                                 <label for="setting_refund_deadline">Refund Request Deadline Date <span
                                         class="required">*</span></label>
-                                <input type="text" id="setting_refund_deadline" placeholder="e.g. August 23, 2025"
+                                <input type="text" id="setting_refund_deadline" placeholder="e.g. August 23, 2026"
                                     style="max-width: 300px;">
                                 <small style="color:var(--text-muted); margin-top:4px; display:block;">
                                     This date appears in the refund policy note on the Proforma Invoice and in the payment notice on the registration form.
@@ -1033,7 +1035,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=73"></script>
+    <script src="app.js?v=81"></script>
 </body>
 
 </html>

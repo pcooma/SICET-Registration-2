@@ -11,31 +11,32 @@ const defaultSettings = {
     },
     award_fee: 10000,
     excursion_fees: {
-        local: 16250,       // LKR (= $50 × 325)
+        local: 15000,
         foreigner: 50       // USD
     },
     inauguration_fee: 10000,         // LKR; Student opt-in only (Local)
     inauguration_fee_usd: 30,       // USD; Student opt-in only (Non-local)
     journals: [
-        { id: 'j1', name: 'Advances in Science and Technology', fee: 0 },
-        { id: 'j2', name: 'International Journal of Disaster Resilience in the Built Environment', fee: 0 }
+        { id: 'j1', name: 'Scopus Q1', fee: 300 },
+        { id: 'j2', name: 'Scopus Q2', fee: 200 },
+        { id: 'j3', name: 'Other', fee: 100 }
     ],
     pre_conference_sessions: [
-        { id: 'pcs1', name: 'AI & Machine Learning Workshop',          fee_local: 3500, fee_saarc: 35, fee_nonsaarc: 50, academic_discount_pct: 20, student_discount_pct: 30 },
-        { id: 'pcs2', name: 'Cybersecurity Essentials Bootcamp',       fee_local: 4000, fee_saarc: 40, fee_nonsaarc: 60, academic_discount_pct: 20, student_discount_pct: 30 },
-        { id: 'pcs3', name: 'IoT & Embedded Systems Lab',              fee_local: 3000, fee_saarc: 30, fee_nonsaarc: 45, academic_discount_pct: 20, student_discount_pct: 30 },
-        { id: 'pcs4', name: 'Research Methodology & Academic Writing', fee_local: 2500, fee_saarc: 25, fee_nonsaarc: 35, academic_discount_pct: 20, student_discount_pct: 30 }
+        { id: 'pcs1', name: 'Quantity Surveying in the era of Digitalisation', fee_local: 10000, fee_saarc: 35, fee_nonsaarc: 50, academic_discount_pct: 0, student_discount_pct: 0 },
+        { id: 'pcs2', name: 'Integrated Design of High-Rise Buildings: From Concept to Construction', fee_local: 12500, fee_saarc: 40, fee_nonsaarc: 60, academic_discount_pct: 50, student_discount_pct: 100 },
+        { id: 'pcs3', name: 'Industry Sector Decarbonization Pathways', fee_local: 5000, fee_saarc: 20, fee_nonsaarc: 30, academic_discount_pct: 0, student_discount_pct: 0 },
+        { id: 'pcs4', name: '6 G wireless Communication (on-line)', fee_local: 1500, fee_saarc: 15, fee_nonsaarc: 25, academic_discount_pct: 0, student_discount_pct: 0 },
+        { id: 'pcs5', name: 'GIS for Civil Engineers', fee_local: 8000, fee_saarc: 30, fee_nonsaarc: 40, academic_discount_pct: 0, student_discount_pct: 0 }
     ],
     categories: [
-        { id: 'studentauthor',    label: 'Student Author',        fee_local: 12500, fee_saarc: 90,  fee_nonsaarc: 125, is_student: true,  no_papers: false, paper_discount: true,  is_workshop_only: false },
-        { id: 'generalauthor',    label: 'General Author',        fee_local: 25000, fee_saarc: 100, fee_nonsaarc: 150, is_student: false, no_papers: false, paper_discount: true,  is_workshop_only: false },
-        { id: 'studentpart',      label: 'Student Participant',   fee_local: 10000, fee_saarc: 20,  fee_nonsaarc: 35,  is_student: true,  no_papers: true,  paper_discount: false, is_workshop_only: false },
-        { id: 'generalpart',      label: 'General Participant',   fee_local: 12500, fee_saarc: 40,  fee_nonsaarc: 70,  is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: false },
+        { id: 'author',           label: 'Author',                fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false, paper_discount: true,  is_workshop_only: false },
+        { id: 'nonauthor',        label: 'Non-Author',            fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: false },
+        { id: 'student',          label: 'Student',               fee_local: 10000, fee_saarc: 100, fee_nonsaarc: 150, is_student: true,  no_papers: false, paper_discount: true,  is_workshop_only: false },
         { id: 'workshopattendee', label: 'Workshop Attendee',     fee_local: 0,     fee_saarc: 0,   fee_nonsaarc: 0,   is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: true  }
     ],
     chair_name: 'Dr. Gayashika Fernando',
-    refund_deadline: 'August 23, 2025',
-    usd_to_lkr: 325,
+    refund_deadline: 'August 23, 2026',
+    usd_to_lkr: 320,
     apc_collection_active: false,
     award_categories: ['Innovation', 'Sustainability', 'Leadership'],
     award_purposes: ['Networking', 'To Receive Award', 'Other'],
@@ -45,11 +46,9 @@ const defaultSettings = {
 
 // ---- GOOGLE DRIVE CONFIGURATION ----
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCfXzpVmHaW5PoFD5eVU-sD_xewMvczVoHZAURx2DjVpBxY255rzFxsjf4czJbvpC8/exec';
-const ADMIN_KEY = 'sicet2026admin';
-
-// ---- SUPER ADMIN CREDENTIALS ----
-const ADMIN_USERNAME = 'p.cooma@gmail.com';
-const ADMIN_PASSWORD = 'www.123@lk';
+const invoiceAuditMode = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    && new URLSearchParams(window.location.search).has('invoiceAudit');
+let adminToken = sessionStorage.getItem('sicet2026_admin_token') || '';
 
 
 // DOM Elements - General
@@ -121,7 +120,7 @@ async function init() {
     updateCostPreviews();
 
     // Check for draft
-    if (formDraft && Object.keys(formDraft).length > 0) {
+    if (!invoiceAuditMode && formDraft && Object.keys(formDraft).length > 0) {
         if (confirm("You have an unsaved registration draft. Would you like to restore it?")) {
             restoreDraft();
         } else {
@@ -429,8 +428,10 @@ function setupEventListeners() {
     });
 
     // Auto-Save: Listen to all form inputs
-    registrationForm.addEventListener('input', debounce(saveDraft, 500));
-    registrationForm.addEventListener('change', debounce(saveDraft, 500));
+    if (!invoiceAuditMode) {
+        registrationForm.addEventListener('input', debounce(saveDraft, 500));
+        registrationForm.addEventListener('change', debounce(saveDraft, 500));
+    }
 
     // Restore stored refId when email is typed, so returning users reuse their record
     document.getElementById('email')?.addEventListener('blur', () => {
@@ -831,12 +832,13 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
         if (hasRgn) {
             const rawFee    = isLocal ? sess.fee_local : (isSAARC ? sess.fee_saarc : sess.fee_nonsaarc);
             const nativeCur = isLocal ? 'LKR' : 'USD';
-            const discRaw   = discPct > 0 ? Math.round(rawFee * (1 - discPct / 100)) : rawFee;
+            const discounted = discPct > 0 ? rawFee * (1 - discPct / 100) : rawFee;
+            const discRaw   = nativeCur === 'LKR' ? Math.round(discounted) : +(discounted.toFixed(2));
             let dispFee     = discRaw;
             let dispFeeOrig = rawFee;
             if (nativeCur !== dispCur) {
-                dispFee     = dispCur === 'LKR' ? Math.round(discRaw * fxRate) : Math.round(discRaw / fxRate);
-                dispFeeOrig = dispCur === 'LKR' ? Math.round(rawFee  * fxRate) : Math.round(rawFee  / fxRate);
+                dispFee     = dispCur === 'LKR' ? Math.round(discRaw * fxRate) : +((discRaw / fxRate).toFixed(2));
+                dispFeeOrig = dispCur === 'LKR' ? Math.round(rawFee  * fxRate) : +((rawFee / fxRate).toFixed(2));
             }
             const strike = discPct > 0
                 ? `<span style="text-decoration:line-through;opacity:0.4;font-size:0.78rem;margin-right:4px;">${dispCur} ${dispFeeOrig.toLocaleString('en-US')}</span>` : '';
@@ -846,8 +848,8 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
             const rawS = sess.fee_saarc;
             const rawN = sess.fee_nonsaarc;
             const dL   = discPct > 0 ? Math.round(rawL * (1 - discPct / 100)) : rawL;
-            const dS   = discPct > 0 ? Math.round(rawS * (1 - discPct / 100)) : rawS;
-            const dN   = discPct > 0 ? Math.round(rawN * (1 - discPct / 100)) : rawN;
+            const dS   = discPct > 0 ? +((rawS * (1 - discPct / 100)).toFixed(2)) : rawS;
+            const dN   = discPct > 0 ? +((rawN * (1 - discPct / 100)).toFixed(2)) : rawN;
             const usdPart = rawS === rawN
                 ? `USD ${dS.toLocaleString('en-US')}`
                 : `SAARC: USD ${dS.toLocaleString('en-US')} / Intl: USD ${dN.toLocaleString('en-US')}`;
@@ -1040,7 +1042,8 @@ function calculateTotalFee() {
                     const nativeCur2 = effectivelyLocal ? 'LKR' : 'USD';
                     const discPct   = wkTier === 'academic' ? (sess.academic_discount_pct || 0)
                                     : wkTier === 'student'  ? (sess.student_discount_pct  || 0) : 0;
-                    const effFee    = discPct > 0 ? Math.round(rawFee * (1 - discPct / 100)) : rawFee;
+                    const discounted = discPct > 0 ? rawFee * (1 - discPct / 100) : rawFee;
+                    const effFee    = nativeCur2 === 'LKR' ? Math.round(discounted) : +(discounted.toFixed(2));
                     const disp = toDisplay(effFee, nativeCur2);
                     displayTotal += disp;
                     const tierTag = discPct > 0 ? ` [${wkTier}, ${discPct}% off]` : '';
@@ -1128,7 +1131,8 @@ function collectFormData(refId) {
 
 async function handleRefLookup() {
     const refId = document.getElementById('lookup-ref-id')?.value?.trim();
-    if (!refId) { showToast('Please enter your Reference ID.', 'error'); return; }
+    const lookupEmail = document.getElementById('lookup-email')?.value?.trim();
+    if (!refId || !lookupEmail) { showToast('Please enter your Reference ID and registration email.', 'error'); return; }
 
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
         showToast('Google Drive not configured.', 'error'); return;
@@ -1138,7 +1142,7 @@ async function handleRefLookup() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bx bx-loader bx-spin"></i> Loading…'; }
 
     try {
-        const url = APPS_SCRIPT_URL + '?action=getRegistrationByRef&ref=' + encodeURIComponent(refId);
+        const url = APPS_SCRIPT_URL + '?action=getRegistrationByRef&ref=' + encodeURIComponent(refId) + '&email=' + encodeURIComponent(lookupEmail);
         const res = await fetch(url);
         const result = await res.json();
 
@@ -1308,6 +1312,7 @@ function populateFormFromData(data) {
 // STEP 2 — Upload payment proof and finalize
 async function handleFormSubmit(e) {
     e.preventDefault();
+    const submitBtn = document.getElementById('btn-submit');
 
     if (!isZeroFeeRegistration && paymentProofFiles.length === 0 && !paymentProofPreviouslyUploaded) {
         showToast('Please upload your proof of payment before submitting.', 'error');
@@ -1351,7 +1356,6 @@ async function handleFormSubmit(e) {
 
     dataObj['Payment_Proof_Base64'] = await Promise.all(paymentProofFiles.map(f => fileToBase64(f)));
 
-    const submitBtn = document.getElementById('btn-submit');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span>Submitting…</span><i class="bx bx-loader bx-spin"></i>';
 
@@ -1407,6 +1411,19 @@ function generateInvoice() {
     const region = document.getElementById('attendeeRegion').value || '';
     const country = document.getElementById('country').value || '';
     const category = document.getElementById('attendeeCategory').value || '';
+
+    // Invoice generation is a button action, so native form submission validation does
+    // not run automatically. Validate the shared identity/billing inputs explicitly.
+    const invoiceRequiredIds = ['title', 'fullName', 'email', 'phone', 'organization', 'attendeeRegion', 'country', 'attendeeCategory'];
+    const firstInvalid = invoiceRequiredIds
+        .map(id => document.getElementById(id))
+        .find(el => !el || !String(el.value || '').trim() || (el.checkValidity && !el.checkValidity()));
+    if (firstInvalid) {
+        showToast('Please complete all attendee profile fields before generating the invoice.', 'error');
+        firstInvalid.reportValidity?.();
+        firstInvalid.focus?.();
+        return;
+    }
 
     const isMain     = document.getElementById('toggleMain').checked;
     const isAward    = document.getElementById('toggleAward').checked;
@@ -1565,7 +1582,8 @@ function generateInvoice() {
                     const rawFee  = isLocalInv ? sess.fee_local : (region === 'SAARC' ? sess.fee_saarc : sess.fee_nonsaarc);
                     const dPct    = invWkTier === 'academic' ? (sess.academic_discount_pct || 0)
                                   : invWkTier === 'student'  ? (sess.student_discount_pct  || 0) : 0;
-                    const effFee  = dPct > 0 ? Math.round(rawFee * (1 - dPct / 100)) : rawFee;
+                    const discounted = dPct > 0 ? rawFee * (1 - dPct / 100) : rawFee;
+                    const effFee  = isLocalInv ? Math.round(discounted) : +(discounted.toFixed(2));
                     const tierLbl = dPct > 0 ? ` [${invWkTier} rate, ${dPct}% off]` : '';
                     addItem(`Pre-Conference Workshop — ${sess.name}${tierLbl}`, effFee, isLocalInv ? 'LKR' : 'USD');
                 }
@@ -1603,6 +1621,15 @@ function generateInvoice() {
 
     const isFreeReg = grandTotal === 0;
     isZeroFeeRegistration = isFreeReg;
+
+    // One final invariant prevents the PDF and displayed quotation from diverging.
+    const displayedCurrency = document.querySelector('.price-value .currency')?.textContent?.trim();
+    const displayedTotal = Number((document.getElementById('totalPriceAmount')?.textContent || '0').replace(/,/g, ''));
+    if (displayedCurrency !== invoiceCur || !Number.isFinite(displayedTotal) || Math.abs(displayedTotal - grandTotal) > 0.009) {
+        showToast('Invoice total changed unexpectedly. Please review the fee breakdown and try again.', 'error');
+        console.error('Invoice total mismatch', { displayedCurrency, displayedTotal, invoiceCur, grandTotal, lineItems });
+        return;
+    }
 
     // ---- 3. PDF Drawing (B&W, professional — targets 1 A4 page) ----
     const L = 14;
@@ -1762,7 +1789,7 @@ function generateInvoice() {
 
         // --- FOOTER ---
         const paymentUrl = 'https://pay.sliit.lk/';
-        const refundDeadline = appSettings.refund_deadline || 'August 23, 2025';
+        const refundDeadline = appSettings.refund_deadline || 'August 23, 2026';
 
         if (Y + 50 > 278) { doc.addPage(); Y = 14; }
 
@@ -1812,17 +1839,30 @@ function generateInvoice() {
 
     const safeName = fullName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'attendee';
     const pdfFileName = `SICET2026_Invoice_${invoiceNum}_${safeName}.pdf`;
+    // Browser regression hook: available only on localhost when explicitly enabled.
+    if (invoiceAuditMode) {
+        let auditNode = document.getElementById('sicet-invoice-audit');
+        if (!auditNode) {
+            auditNode = document.createElement('textarea');
+            auditNode.id = 'sicet-invoice-audit';
+            auditNode.hidden = true;
+            document.body.appendChild(auditNode);
+        }
+        auditNode.value = JSON.stringify({ pdfFileName, invoiceCur, grandTotal, lineItems });
+    }
     doc.save(pdfFileName);
 
     // Save registration JSON to Drive so ref ID lookup works (single request, async non-blocking)
-    if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+    if (!invoiceAuditMode && APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
         (async () => {
             try {
                 const dataObj = collectFormData(refId);
                 dataObj.Status = isFreeReg ? 'Submitted' : 'Pending Payment';
                 const studentIdInput = document.getElementById('studentId');
                 if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
-                await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataObj) });
+                await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(dataObj)
+                });
             } catch (_) {}
         })();
     }
@@ -1999,22 +2039,35 @@ function switchView(view) {
     }
 }
 
-function handleAdminLogin() {
+async function handleAdminLogin() {
     const un = document.getElementById('admin-username').value.trim();
     const pw = document.getElementById('admin-password').value;
     const errEl = document.getElementById('login-error');
 
-    if (un === ADMIN_USERNAME && pw === ADMIN_PASSWORD) {
+    const btn = document.getElementById('btn-login-submit');
+    btn.disabled = true;
+    try {
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST', headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'adminLogin', email: un, password: pw })
+        });
+        const result = await response.json();
+        if (!result.success || !result.token) throw new Error(result.error || 'Invalid credentials');
+        adminToken = result.token;
+        sessionStorage.setItem('sicet2026_admin_token', adminToken);
         adminLoggedIn = true;
         navAdminBtn.style.display = '';
         navAdminBtn.innerHTML = "<i class='bx bx-grid-alt'></i> Dashboard";
         navSettingsBtn.innerHTML = "<i class='bx bx-cog'></i> Settings";
         closeLoginModal();
         switchView(pendingAdminView);
-    } else {
+    } catch (error) {
+        errEl.textContent = error.message || 'Could not authenticate.';
         errEl.classList.remove('hidden');
         document.getElementById('admin-password').value = '';
         document.getElementById('admin-password').focus();
+    } finally {
+        btn.disabled = false;
     }
 }
 
@@ -2473,11 +2526,13 @@ function populateSettingsForm() {
 
     // Invoice / Chair & Refund
     document.getElementById('setting_chair_name').value = appSettings.chair_name || '';
-    document.getElementById('setting_refund_deadline').value = appSettings.refund_deadline || 'August 23, 2025';
+    document.getElementById('setting_refund_deadline').value = appSettings.refund_deadline || 'August 23, 2026';
     document.getElementById('setting_usd_rate').value = appSettings.usd_to_lkr || 320;
 
     const refundNotice = document.getElementById('notice-refund-deadline');
-    if (refundNotice) refundNotice.textContent = appSettings.refund_deadline || 'August 23, 2025';
+    if (refundNotice) refundNotice.textContent = appSettings.refund_deadline || 'August 23, 2026';
+    const exchangeNotice = document.getElementById('notice-exchange-rate');
+    if (exchangeNotice) exchangeNotice.textContent = appSettings.usd_to_lkr || 320;
 
     // APC collection active
     const apcActiveEl = document.getElementById('setting_apc_active');
@@ -2542,11 +2597,13 @@ function saveSettings(e) {
 
     // Invoice / Chair & Refund
     appSettings.chair_name = document.getElementById('setting_chair_name').value.trim() || '[Name]';
-    appSettings.refund_deadline = document.getElementById('setting_refund_deadline').value.trim() || 'August 23, 2025';
+    appSettings.refund_deadline = document.getElementById('setting_refund_deadline').value.trim() || 'August 23, 2026';
     appSettings.usd_to_lkr = Number(document.getElementById('setting_usd_rate').value) || 320;
 
     const refundNotice = document.getElementById('notice-refund-deadline');
     if (refundNotice) refundNotice.textContent = appSettings.refund_deadline;
+    const exchangeNotice = document.getElementById('notice-exchange-rate');
+    if (exchangeNotice) exchangeNotice.textContent = appSettings.usd_to_lkr;
 
     // Save Journals
     const jNames = document.querySelectorAll('.journal-name');
@@ -2742,7 +2799,7 @@ function removePaymentProof(idx) {
 async function fetchAndShowPaymentProofs(refId, container) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;"><i class="bx bx-loader bx-spin"></i> Loading payment proofs…</p>';
     try {
-        const url = `${APPS_SCRIPT_URL}?action=getPaymentProofs&ref=${encodeURIComponent(refId)}&key=${encodeURIComponent(ADMIN_KEY)}`;
+        const url = `${APPS_SCRIPT_URL}?action=getPaymentProofs&ref=${encodeURIComponent(refId)}&token=${encodeURIComponent(adminToken)}`;
         const res = await fetch(url);
         const json = await res.json();
         if (!json.success || !json.files || json.files.length === 0) {
@@ -2784,13 +2841,16 @@ async function submitToGoogleDrive(dataObj) {
         return false;
     }
     try {
-        // Use no-cors so the browser does not block the request due to CORS preflight.
-        // The data is safely received by the Apps Script even though we cannot read the response.
-        await fetch(APPS_SCRIPT_URL, {
+        const response = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(dataObj)
         });
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.error || 'The server rejected the registration.', 'error');
+            return false;
+        }
         return true;
     } catch (err) {
         showToast('Network error — please check your connection and try again.', 'error');
@@ -2808,7 +2868,7 @@ async function loadFromGoogleDrive() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bx bx-loader bx-spin"></i> Loading…'; }
 
     try {
-        const url = APPS_SCRIPT_URL + '?action=getSubmissions&key=' + encodeURIComponent(ADMIN_KEY);
+        const url = APPS_SCRIPT_URL + '?action=getSubmissions&token=' + encodeURIComponent(adminToken);
         const res = await fetch(url);
         const result = await res.json();
 
@@ -3376,7 +3436,7 @@ async function pushSettingsToDrive() {
         const resp = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'saveSettings', adminKey: ADMIN_KEY, settings: appSettings })
+            body: JSON.stringify({ action: 'saveSettings', adminToken, settings: appSettings })
         });
         if (!resp.ok) return false;
         const json = await resp.json();
@@ -3431,7 +3491,8 @@ function gatherWaContext() {
 
 async function loadWaRegistration() {
     const refId = (document.getElementById('wa-ref-lookup')?.value || '').trim();
-    if (!refId) { showToast('Please enter your Reference ID.', 'error'); return; }
+    const lookupEmail = (document.getElementById('wa-ref-email')?.value || '').trim();
+    if (!refId || !lookupEmail) { showToast('Please enter your Reference ID and registration email.', 'error'); return; }
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
         showToast('Google Drive not configured.', 'error'); return;
     }
@@ -3442,7 +3503,7 @@ async function loadWaRegistration() {
     if (statusDiv) statusDiv.style.display = 'none';
 
     try {
-        const url = APPS_SCRIPT_URL + '?action=getRegistrationByRef&ref=' + encodeURIComponent(refId);
+        const url = APPS_SCRIPT_URL + '?action=getRegistrationByRef&ref=' + encodeURIComponent(refId) + '&email=' + encodeURIComponent(lookupEmail);
         const res  = await fetch(url);
         const result = await res.json();
 

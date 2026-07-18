@@ -4,7 +4,7 @@
  * HOW TO DEPLOY:
  * 1. Open https://script.google.com and create a new project named "SICET2026 Registration"
  * 2. Paste this entire file into Code.gs
- * 3. Change ADMIN_KEY below to a secret key of your choice
+ * 3. In Project Settings > Script properties set ADMIN_PASSWORD and, optionally, ADMIN_EMAIL
  * 4. Click Deploy → New deployment → Web app
  *    - Execute as: Me
  *    - Who has access: Anyone
@@ -24,7 +24,11 @@
 
 const MAIN_FOLDER_ID    = '1REXNutSF3mzO7tRkg0tD0GjLqjUlhI-n';
 const MASTER_SHEET_NAME = 'SICET2026 Master Registrations';
-const ADMIN_KEY         = 'sicet2026admin'; // Change this to something secret
+// Secrets must be stored in Apps Script > Project Settings > Script properties.
+// Required: ADMIN_PASSWORD. Optional: ADMIN_EMAIL (defaults to the conference admin).
+const ADMIN_EMAIL_DEFAULT = 'p.cooma@gmail.com';
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const ALLOWED_UPLOAD_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 // ---------------------------------------------------------------------------
 // POST — handles all write actions from the frontend
@@ -41,6 +45,8 @@ function doPost(e) {
   try {
     const data   = JSON.parse(e.postData.contents);
     const action = data.action || 'submitRegistration';
+
+    if (action === 'adminLogin') return handleAdminLogin(data);
 
     if (action === 'saveInvoice') {
       return handleSaveInvoice(data);
@@ -64,10 +70,10 @@ function doPost(e) {
 // ---------------------------------------------------------------------------
 function doGet(e) {
   const action = (e.parameter && e.parameter.action) || '';
-  const key    = (e.parameter && e.parameter.key)    || '';
+  const token  = (e.parameter && e.parameter.token)  || '';
 
   if (action === 'getSubmissions') {
-    if (key !== ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' });
+    if (!verifyAdminToken(token)) return jsonResponse({ error: 'Unauthorized' });
     try {
       const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
       return jsonResponse({ success: true, submissions: getSubmissionsFromSheet(mainFolder) });
@@ -78,9 +84,13 @@ function doGet(e) {
 
   if (action === 'getRegistrationByRef') {
     const ref = (e.parameter && e.parameter.ref) || '';
-    if (!ref) return jsonResponse({ error: 'No reference ID provided' });
+    const email = (e.parameter && e.parameter.email) || '';
+    if (!ref || !email) return jsonResponse({ error: 'Reference ID and email are required' });
     try {
       const data = getRegistrationByRef(ref);
+      if (normaliseEmail(data.Email) !== normaliseEmail(email)) {
+        return jsonResponse({ success: false, error: 'Reference ID and email do not match' });
+      }
       return jsonResponse({ success: true, data: data });
     } catch (err) {
       return jsonResponse({ success: false, error: err.toString() });
@@ -102,7 +112,7 @@ function doGet(e) {
   }
 
   if (action === 'getPaymentProofs') {
-    if (key !== ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' });
+    if (!verifyAdminToken(token)) return jsonResponse({ error: 'Unauthorized' });
     const ref = (e.parameter && e.parameter.ref) || '';
     if (!ref) return jsonResponse({ error: 'No ref provided' });
     try {
@@ -142,6 +152,10 @@ function doGet(e) {
 function handleSubmitRegistration(data) {
   const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
 
+  const validation = validateRegistration(data, mainFolder);
+  if (!validation.valid) return jsonResponse({ success: false, error: validation.errors.join(' ') });
+  data = validation.data;
+
   // Server-side deduplication: if no Invoice_ID supplied, check sheet for existing row with same email
   if (!data.Invoice_ID) {
     const existingId = findInvoiceIdByEmail(data.Email, mainFolder);
@@ -154,12 +168,7 @@ function handleSubmitRegistration(data) {
 
   // Find or create the registrant's sub-folder
   let userFolder;
-  const existingFolders = mainFolder.getFoldersByName(folderName);
-  if (existingFolders.hasNext()) {
-    userFolder = existingFolders.next();
-  } else {
-    userFolder = mainFolder.createFolder(folderName);
-  }
+  userFolder = findFolderByRef(mainFolder, data.Invoice_ID) || mainFolder.createFolder(folderName);
 
   const folderUrl = userFolder.getUrl();
 
@@ -208,12 +217,13 @@ function handleSaveInvoice(data) {
 
   // Find or create folder
   let userFolder;
-  const existingFolders = mainFolder.getFoldersByName(folderName);
-  if (existingFolders.hasNext()) {
-    userFolder = existingFolders.next();
-  } else {
-    userFolder = mainFolder.createFolder(folderName);
+  if (!isValidRef(data.Invoice_ID) || !data.Email) return jsonResponse({ success: false, error: 'Valid reference ID and email required' });
+  const existing = findFolderByRef(mainFolder, data.Invoice_ID);
+  if (existing) {
+    const saved = getRegistrationByRef(data.Invoice_ID);
+    if (normaliseEmail(saved.Email) !== normaliseEmail(data.Email)) return jsonResponse({ success: false, error: 'Reference ID and email do not match' });
   }
+  userFolder = existing || mainFolder.createFolder(folderName);
 
   if (data.invoice_pdf && data.invoice_pdf.data) {
     // Determine next version number
@@ -240,7 +250,7 @@ function handleSaveInvoice(data) {
 // handleSaveSettings — persist admin settings JSON to Drive
 // ---------------------------------------------------------------------------
 function handleSaveSettings(data) {
-  if (data.adminKey !== ADMIN_KEY) {
+  if (!verifyAdminToken(data.adminToken)) {
     return jsonResponse({ success: false, error: 'Unauthorized' });
   }
   if (!data.settings) {
@@ -259,6 +269,80 @@ function handleSaveSettings(data) {
     Logger.log('handleSaveSettings error: ' + err.toString());
     return jsonResponse({ success: false, error: err.toString() });
   }
+}
+
+function handleAdminLogin(data) {
+  const props = PropertiesService.getScriptProperties();
+  const expectedPassword = props.getProperty('ADMIN_PASSWORD');
+  const expectedEmail = normaliseEmail(props.getProperty('ADMIN_EMAIL') || ADMIN_EMAIL_DEFAULT);
+  if (!expectedPassword) return jsonResponse({ success: false, error: 'Admin login is not configured' });
+  if (normaliseEmail(data.email) !== expectedEmail || String(data.password || '') !== expectedPassword) {
+    return jsonResponse({ success: false, error: 'Invalid credentials' });
+  }
+  const expires = Date.now() + 8 * 60 * 60 * 1000;
+  const payload = Utilities.base64EncodeWebSafe(expectedEmail + '|' + expires);
+  const sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, expectedPassword));
+  return jsonResponse({ success: true, token: payload + '.' + sig, expires: expires });
+}
+
+function verifyAdminToken(token) {
+  const password = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD');
+  if (!password || !token || token.indexOf('.') < 0) return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const expected = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(parts[0], password));
+  if (expected !== parts[1]) return false;
+  try {
+    const decoded = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString();
+    const expires = Number(decoded.split('|').pop());
+    return isFinite(expires) && Date.now() < expires;
+  } catch (_) { return false; }
+}
+
+function normaliseEmail(value) { return String(value || '').trim().toLowerCase(); }
+function isValidRef(value) { return /^SICET2026-[A-Za-z0-9-]{6,30}$/.test(String(value || '')); }
+
+function findFolderByRef(mainFolder, refId) {
+  const folders = mainFolder.getFolders();
+  while (folders.hasNext()) {
+    const folder = folders.next();
+    if (folder.getName().indexOf(refId + '_') === 0) return folder;
+  }
+  return null;
+}
+
+function validateUpload(fileObj, label, errors) {
+  if (!fileObj || !fileObj.data) return;
+  const estimatedBytes = Math.floor(String(fileObj.data).length * 0.75);
+  if (estimatedBytes > MAX_UPLOAD_BYTES) errors.push(label + ' exceeds 5 MB.');
+  if (ALLOWED_UPLOAD_MIME.indexOf(String(fileObj.mimeType || '').toLowerCase()) < 0) errors.push(label + ' has an unsupported file type.');
+}
+
+function validateRegistration(input, mainFolder) {
+  const data = Object.assign({}, input || {});
+  const errors = [];
+  ['Full_Name','Email','Phone','Organization','Attendee_Region','Country','Attendee_Category','Registration_Type'].forEach(function(k) {
+    if (!String(data[k] || '').trim()) errors.push(k.replace(/_/g, ' ') + ' is required.');
+  });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.Email || ''))) errors.push('A valid email is required.');
+  if (['Local','SAARC','Non-SAARC'].indexOf(data.Attendee_Region) < 0) errors.push('Invalid attendee region.');
+  if (!isValidRef(data.Invoice_ID)) errors.push('Invalid reference ID.');
+  const existing = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
+  if (existing) {
+    try {
+      const saved = getRegistrationByRef(data.Invoice_ID);
+      if (normaliseEmail(saved.Email) !== normaliseEmail(data.Email)) errors.push('Reference ID and email do not match.');
+    } catch (_) { errors.push('Existing registration could not be verified.'); }
+  }
+  validateUpload(data.Student_ID_Base64, 'Student ID', errors);
+  validateUpload(data.Workshop_ID_Base64, 'Workshop ID', errors);
+  const proofs = Array.isArray(data.Payment_Proof_Base64) ? data.Payment_Proof_Base64 : [data.Payment_Proof_Base64];
+  proofs.forEach(function(p, i) { validateUpload(p, 'Payment proof ' + (i + 1), errors); });
+  const quotedTotal = Number(String(data.Calculated_Total_Fee || '0').replace(/,/g, ''));
+  const hasPaymentProof = proofs.some(function(p) { return p && p.data; }) || data.Payment_Proof_Base64 === '(uploaded — see folder)';
+  data.Status = quotedTotal > 0 ? (hasPaymentProof ? 'Payment Proof Submitted' : 'Pending Payment') : 'Submitted';
+  data.Submission_Date = new Date().toISOString();
+  return { valid: errors.length === 0, errors: errors, data: data };
 }
 
 // ---------------------------------------------------------------------------
