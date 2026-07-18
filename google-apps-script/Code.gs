@@ -29,6 +29,58 @@ const MASTER_SHEET_NAME = 'SICET2026 Master Registrations';
 const ADMIN_EMAIL_DEFAULT = 'p.cooma@gmail.com';
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+const MASTER_HEADERS = [
+  'Submission_Date', 'Invoice_ID', 'Status',
+  'Title', 'Full_Name', 'Email', 'Phone',
+  'Organization', 'Attendee_Region', 'Country', 'Attendee_Category',
+  'Registration_Type', 'Calculated_Total_Fee', 'Currency',
+  'Certificate_Name', 'Designation', 'Food_Preference', 'Number_of_Papers',
+  'Include_Inauguration',
+  'Company_Name', 'Participant_Count', 'Participant_Names', 'Award_Category',
+  'Primary_Reason', 'Primary_Reason_Other',
+  'Excursion_Local_Count', 'Excursion_Foreign_Count',
+  'Excursion_Mobility', 'Excursion_Activity',
+  'PreConf_Sessions', 'Workshop_Discount_Tier', 'Workshop_ID_File',
+  'Address', 'Bill_To', 'Billing_Org_Name', 'Billing_Tax_ID',
+  'Billing_Address', 'Billing_Finance_Email',
+  'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL'
+];
+
+/**
+ * ONE-TIME MANUAL MIGRATION
+ * Run this function once from the Apps Script editor before deploying the new
+ * web-app version. It only appends missing headers to the existing master sheet;
+ * it never deletes, reorders, or overwrites existing columns or registration rows.
+ */
+function migrateMasterSheetSchema() {
+  const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+  const files = mainFolder.getFilesByName(MASTER_SHEET_NAME);
+  if (!files.hasNext()) {
+    return { success: true, message: 'No master sheet exists yet; the full schema will be created on first submission.', added: [] };
+  }
+
+  const sheet = SpreadsheetApp.openById(files.next().getId()).getActiveSheet();
+  const lastColumn = sheet.getLastColumn();
+  const existing = lastColumn > 0
+    ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String)
+    : [];
+  const missing = MASTER_HEADERS.filter(function(header) { return existing.indexOf(header) < 0; });
+
+  if (missing.length > 0) {
+    sheet.getRange(1, lastColumn + 1, 1, missing.length).setValues([missing]);
+    SpreadsheetApp.flush();
+  }
+
+  const result = {
+    success: true,
+    existingColumnCount: existing.length,
+    addedColumnCount: missing.length,
+    finalColumnCount: existing.length + missing.length,
+    added: missing
+  };
+  Logger.log(JSON.stringify(result));
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // POST — handles all write actions from the frontend
@@ -358,22 +410,7 @@ function upsertMasterSheet(data, mainFolder, folderUrl) {
     const ssFile = DriveApp.getFileById(spreadsheet.getId());
     mainFolder.addFile(ssFile);
     DriveApp.getRootFolder().removeFile(ssFile);
-    spreadsheet.getActiveSheet().appendRow([
-      'Submission_Date', 'Invoice_ID', 'Status',
-      'Title', 'Full_Name', 'Email', 'Phone',
-      'Organization', 'Attendee_Region', 'Country', 'Attendee_Category',
-      'Registration_Type', 'Calculated_Total_Fee', 'Currency',
-      'Certificate_Name', 'Designation', 'Food_Preference', 'Number_of_Papers',
-      'Include_Inauguration',
-      'Company_Name', 'Participant_Count', 'Participant_Names', 'Award_Category',
-      'Primary_Reason', 'Primary_Reason_Other',
-      'Excursion_Local_Count', 'Excursion_Foreign_Count',
-      'Excursion_Mobility', 'Excursion_Activity',
-      'PreConf_Sessions', 'Workshop_Discount_Tier', 'Workshop_ID_File',
-      'Address', 'Bill_To', 'Billing_Org_Name', 'Billing_Tax_ID',
-      'Billing_Address', 'Billing_Finance_Email',
-      'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL'
-    ]);
+    spreadsheet.getActiveSheet().appendRow(MASTER_HEADERS);
   }
 
   const sheet  = spreadsheet.getActiveSheet();
