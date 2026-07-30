@@ -359,6 +359,10 @@ function validateSettings(input) {
   validateSettingsCollection(settings.categories, 'category', 'label', errors);
   validateSettingsCollection(settings.pre_conference_sessions || [], 'workshop', 'name', errors);
   validateSettingsCollection(settings.journals || [], 'journal', 'name', errors);
+  (settings.journals || []).forEach(function(journal) {
+    journal.apc_not_applicable = journal.apc_not_applicable === true;
+    if (journal.apc_not_applicable) journal.fee = 0;
+  });
   if (!Array.isArray(settings.categories) || settings.categories.length === 0) {
     errors.push('At least one attendee category is required.');
   }
