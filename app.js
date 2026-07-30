@@ -144,6 +144,7 @@ function setupEventListeners() {
                     sections[sectionName].classList.add('hidden');
                 }
             }
+            normalizeSectionToggleState(e.target);
 
             // Pre-conference sessions block: visible when Main or Pre-Conf toggle is on AND sessions are configured
             const sharedSess = document.getElementById('section-preconf-sessions');
@@ -601,11 +602,19 @@ function updateExcursionTicketVisibility() {
             foreignGroup.classList.add('hidden');
             const foreignCount = document.getElementById('excursionForeignCount');
             if (foreignCount) foreignCount.value = 0;
+            const localCount = document.getElementById('excursionLocalCount');
+            if (document.getElementById('toggleExcursion')?.checked && localCount && Number(localCount.value) < 1) {
+                localCount.value = 1;
+            }
         } else if (region) {
             foreignGroup.classList.remove('hidden');
             localGroup.classList.add('hidden');
             const localCount = document.getElementById('excursionLocalCount');
             if (localCount) localCount.value = 0;
+            const foreignCount = document.getElementById('excursionForeignCount');
+            if (document.getElementById('toggleExcursion')?.checked && foreignCount && Number(foreignCount.value) < 1) {
+                foreignCount.value = 1;
+            }
         } else {
             // No region set yet — show both groups so the user can pick
             localGroup.classList.remove('hidden');
@@ -629,6 +638,71 @@ function updateExcursionTicketVisibility() {
     }
 
     calculateTotalFee();
+}
+
+function normalizeSectionToggleState(toggle) {
+    if (!toggle) return;
+    if (toggle.id === 'toggleExcursion') {
+        const region = document.getElementById('attendeeRegion')?.value || '';
+        const local = document.getElementById('excursionLocalCount');
+        const foreign = document.getElementById('excursionForeignCount');
+        if (toggle.checked) {
+            if (region === 'Local' && local && Number(local.value) < 1) local.value = 1;
+            if (region && region !== 'Local' && foreign && Number(foreign.value) < 1) foreign.value = 1;
+        } else {
+            if (local) local.value = 0;
+            if (foreign) foreign.value = 0;
+        }
+    }
+
+    if (toggle.id === 'toggleMain' && !toggle.checked) {
+        const numberOfPapers = document.getElementById('numberOfPapers');
+        if (numberOfPapers) {
+            numberOfPapers.value = 0;
+            numberOfPapers.required = false;
+        }
+        const paperContainer = document.getElementById('dynamic-papers-container');
+        if (paperContainer) paperContainer.innerHTML = '';
+        const inauguration = document.getElementById('includeInauguration');
+        if (inauguration) inauguration.checked = false;
+    }
+
+    if (toggle.id === 'toggleAward' && !toggle.checked) {
+        const participantCount = document.getElementById('participantCount');
+        if (participantCount) participantCount.value = 1;
+        ['participantNames', 'awardCategory', 'primaryReason', 'primaryReasonOther', 'companyName'].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) field.value = '';
+        });
+    }
+
+    if (toggle.id === 'togglePreConf' && !toggle.checked) {
+        document.querySelectorAll('.preconf-session-check').forEach(checkbox => { checkbox.checked = false; });
+        const tier = document.getElementById('workshopDiscountTier');
+        if (tier) tier.value = 'regular';
+    }
+}
+
+function validateActiveProductSelections() {
+    if (document.getElementById('togglePreConf')?.checked &&
+        document.querySelectorAll('.preconf-session-check:checked').length === 0) {
+        showToast('Please select at least one Pre-Conference Workshop.', 'error');
+        document.getElementById('section-preconf-sessions')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+
+    if (document.getElementById('toggleExcursion')?.checked) {
+        const region = document.getElementById('attendeeRegion')?.value || '';
+        const count = region === 'Local'
+            ? Number(document.getElementById('excursionLocalCount')?.value || 0)
+            : Number(document.getElementById('excursionForeignCount')?.value || 0);
+        if (!region || count < 1) {
+            showToast('Excursion registration requires at least one ticket for the attendee’s region.', 'error');
+            document.getElementById('section-excursion')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return false;
+        }
+    }
+    return true;
 }
 
 // ---- COST PREVIEW TABLES ----
@@ -1160,6 +1234,35 @@ function collectFormData(refId) {
 
     // Normalize conditional fields at the submission boundary. Hidden or
     // imported stale values must not become operational commitments.
+    if (!document.getElementById('toggleMain')?.checked) {
+        dataObj['Number_of_Papers'] = '0';
+        dataObj['Include_Inauguration'] = '';
+        Object.keys(dataObj).forEach(key => {
+            if (/^Paper_\d+_/.test(key)) delete dataObj[key];
+        });
+    }
+    if (!document.getElementById('toggleAward')?.checked) {
+        dataObj['Company_Name'] = '';
+        dataObj['Participant_Count'] = '0';
+        dataObj['Participant_Names'] = '';
+        dataObj['Award_Category'] = '';
+        dataObj['Primary_Reason'] = '';
+        dataObj['Primary_Reason_Other'] = '';
+    }
+    if (!document.getElementById('toggleExcursion')?.checked) {
+        dataObj['Excursion_Local_Count'] = '0';
+        dataObj['Excursion_Foreign_Count'] = '0';
+        dataObj['Mobility_Requirements'] = '';
+        dataObj['Preferred_Activity'] = '';
+    }
+    if (!document.getElementById('togglePreConf')?.checked) {
+        Object.keys(dataObj).forEach(key => {
+            if (/^PreConf_/.test(key)) delete dataObj[key];
+        });
+        dataObj['PreConf_Sessions'] = '';
+        dataObj['PreConf_Session_IDs'] = '';
+        dataObj['Workshop_Discount_Tier'] = 'regular';
+    }
     const categoryDef = (appSettings.categories || []).find(category =>
         category.id === dataObj.Attendee_Category_ID || category.label === dataObj.Attendee_Category);
     if (categoryDef?.no_papers || categoryDef?.is_workshop_only) {
@@ -1398,6 +1501,8 @@ async function handleFormSubmit(e) {
     e.preventDefault();
     const submitBtn = document.getElementById('btn-submit');
 
+    if (!validateActiveProductSelections()) return;
+
     if (!isZeroFeeRegistration && paymentProofFiles.length === 0 && !paymentProofPreviouslyUploaded) {
         showToast('Please upload your proof of payment before submitting.', 'error');
         document.getElementById('paymentProof').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1528,6 +1633,7 @@ function generateInvoice() {
         showToast('Please select registration items to generate an invoice.', 'error');
         return;
     }
+    if (!validateActiveProductSelections()) return;
     if (isMain && !region) {
         showToast('Please select your Attendee Region before generating the invoice.', 'error');
         document.getElementById('attendeeRegion')?.focus();

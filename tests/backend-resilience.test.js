@@ -110,6 +110,7 @@ assert.equal(replacementFiles.find(file => file.id === 'new').trashed, false, 'n
 assert.equal(replacementFiles.find(file => file.id === 'new').name, 'settings.json');
 
 const normalizedNoPapers = sandbox.normalizeConditionalRegistration({
+  Registration_Type: 'Main + Excursion',
   Number_of_Papers: '5',
   Include_Inauguration: 'on',
   Attendee_Region: 'SAARC',
@@ -120,5 +121,59 @@ assert.equal(normalizedNoPapers.Number_of_Papers, '0', 'no-papers category must 
 assert.equal(normalizedNoPapers.Include_Inauguration, '', 'non-student category must discard inauguration opt-in');
 assert.equal(normalizedNoPapers.Excursion_Local_Count, '0', 'foreign region must discard hidden local excursion count');
 assert.equal(normalizedNoPapers.Excursion_Foreign_Count, '2');
+
+const normalizedInactiveSections = sandbox.normalizeConditionalRegistration({
+  Registration_Type: 'Pre-Conference Workshops',
+  Number_of_Papers: '3',
+  Paper_1_Title: 'Orphaned title',
+  Include_Inauguration: 'on',
+  Participant_Count: '5',
+  Participant_Names: 'Orphaned names',
+  Excursion_Local_Count: '4',
+  Mobility_Requirements: 'Wheelchair Access Needed',
+  PreConf_Session_IDs: 'pcs1',
+  PreConf_Sessions: 'Workshop A',
+  Workshop_Discount_Tier: 'student'
+}, { no_papers: false, is_student: true, is_workshop_only: false });
+assert.equal(normalizedInactiveSections.Number_of_Papers, '0', 'inactive main conference must discard paper count');
+assert.equal('Paper_1_Title' in normalizedInactiveSections, false, 'inactive main conference must discard paper details');
+assert.equal(normalizedInactiveSections.Include_Inauguration, '', 'inactive main conference must discard inauguration opt-in');
+assert.equal(normalizedInactiveSections.Participant_Count, '0', 'inactive award must discard participant count');
+assert.equal(normalizedInactiveSections.Participant_Names, '', 'inactive award must discard participant details');
+assert.equal(normalizedInactiveSections.Excursion_Local_Count, '0', 'inactive excursion must discard ticket count');
+assert.equal(normalizedInactiveSections.Mobility_Requirements, '', 'inactive excursion must discard preferences');
+assert.equal(normalizedInactiveSections.PreConf_Session_IDs, 'pcs1', 'active workshop selections must be preserved');
+assert.equal(normalizedInactiveSections.Workshop_Discount_Tier, 'student', 'active workshop tier must be preserved');
+
+const emptyFolder = {
+  getFolders() {
+    return { hasNext: () => false };
+  }
+};
+const baseRegistration = {
+  Full_Name: 'Test User',
+  Email: 'test@example.com',
+  Phone: '+94 77 123 4567',
+  Organization: 'SLIIT',
+  Attendee_Region: 'Local',
+  Country: 'Sri Lanka',
+  Attendee_Category: 'Author',
+  Invoice_ID: 'SICET2026-TEST01',
+  Calculated_Total_Fee: '0'
+};
+const emptyWorkshopRegistration = sandbox.validateRegistration(Object.assign({}, baseRegistration, {
+  Registration_Type: 'Pre-Conference Workshops',
+  PreConf_Session_IDs: '',
+  PreConf_Sessions: ''
+}), emptyFolder);
+assert.equal(emptyWorkshopRegistration.valid, false, 'active workshop registration must select at least one workshop');
+assert.ok(Array.from(emptyWorkshopRegistration.errors).includes('Select at least one pre-conference workshop.'));
+
+const zeroExcursionRegistration = sandbox.validateRegistration(Object.assign({}, baseRegistration, {
+  Registration_Type: 'Excursion',
+  Excursion_Local_Count: '0'
+}), emptyFolder);
+assert.equal(zeroExcursionRegistration.valid, false, 'active excursion must include at least one participant');
+assert.ok(Array.from(zeroExcursionRegistration.errors).includes('Excursion registration requires at least one participant.'));
 
 console.log('backend resilience tests passed');

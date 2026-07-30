@@ -461,6 +461,19 @@ function validateRegistration(input, mainFolder) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.Email || ''))) errors.push('A valid email is required.');
   if (['Local','SAARC','Non-SAARC'].indexOf(data.Attendee_Region) < 0) errors.push('Invalid attendee region.');
   if (!isValidRef(data.Invoice_ID)) errors.push('Invalid reference ID.');
+  const registrationTypes = String(data.Registration_Type || '');
+  if (registrationTypes.indexOf('Pre-Conference Workshops') >= 0 &&
+      !String(data.PreConf_Session_IDs || data.PreConf_Sessions || '').trim()) {
+    errors.push('Select at least one pre-conference workshop.');
+  }
+  if (registrationTypes.indexOf('Excursion') >= 0) {
+    const excursionCount = data.Attendee_Region === 'Local'
+      ? Number(data.Excursion_Local_Count || 0)
+      : Number(data.Excursion_Foreign_Count || 0);
+    if (!isFinite(excursionCount) || excursionCount < 1) {
+      errors.push('Excursion registration requires at least one participant.');
+    }
+  }
   const existing = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
   if (existing) {
     try {
@@ -572,6 +585,41 @@ function attachPricingSnapshot(data, mainFolder) {
 }
 
 function normalizeConditionalRegistration(data, category) {
+  const registrationTypes = String(data.Registration_Type || '');
+  const hasMain = registrationTypes.indexOf('Main') >= 0;
+  const hasAward = registrationTypes.indexOf('Award') >= 0;
+  const hasExcursion = registrationTypes.indexOf('Excursion') >= 0;
+  const hasPreConf = registrationTypes.indexOf('Pre-Conference Workshops') >= 0;
+
+  if (!hasMain) {
+    data.Number_of_Papers = '0';
+    data.Include_Inauguration = '';
+    Object.keys(data).forEach(function(key) {
+      if (/^Paper_\d+_/.test(key)) delete data[key];
+    });
+  }
+  if (!hasAward) {
+    data.Company_Name = '';
+    data.Participant_Count = '0';
+    data.Participant_Names = '';
+    data.Award_Category = '';
+    data.Primary_Reason = '';
+    data.Primary_Reason_Other = '';
+  }
+  if (!hasExcursion) {
+    data.Excursion_Local_Count = '0';
+    data.Excursion_Foreign_Count = '0';
+    data.Mobility_Requirements = '';
+    data.Preferred_Activity = '';
+  }
+  if (!hasPreConf) {
+    Object.keys(data).forEach(function(key) {
+      if (/^PreConf_/.test(key)) delete data[key];
+    });
+    data.PreConf_Sessions = '';
+    data.PreConf_Session_IDs = '';
+    data.Workshop_Discount_Tier = 'regular';
+  }
   if (category && (category.no_papers || category.is_workshop_only)) {
     data.Number_of_Papers = '0';
   }
