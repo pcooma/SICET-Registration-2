@@ -534,7 +534,9 @@ function attachPricingSnapshot(data, mainFolder) {
       data.Attendee_Category_ID = saved.Attendee_Category_ID || '';
       data.PreConf_Session_IDs = data.PreConf_Session_IDs || saved.PreConf_Session_IDs || '';
       data.Pricing_Snapshot = saved.Pricing_Snapshot;
-      return data;
+      let historicalCategory = null;
+      try { historicalCategory = JSON.parse(saved.Pricing_Snapshot).category || null; } catch (_) {}
+      return normalizeConditionalRegistration(data, historicalCategory);
     }
   }
   if (!category) throw new Error('Selected attendee category is no longer available. Refresh and choose an active category.');
@@ -566,6 +568,21 @@ function attachPricingSnapshot(data, mainFolder) {
     journals: settings.journals || [],
     usd_to_lkr: settings.usd_to_lkr || 0
   });
+  return normalizeConditionalRegistration(data, category);
+}
+
+function normalizeConditionalRegistration(data, category) {
+  if (category && (category.no_papers || category.is_workshop_only)) {
+    data.Number_of_Papers = '0';
+  }
+  if (!category || !category.is_student) {
+    data.Include_Inauguration = '';
+  }
+  if (data.Attendee_Region === 'Local') {
+    data.Excursion_Foreign_Count = '0';
+  } else if (data.Attendee_Region) {
+    data.Excursion_Local_Count = '0';
+  }
   return data;
 }
 
