@@ -392,6 +392,14 @@ function setupEventListeners() {
 
     // Returning registrant — lookup by ref ID
     document.getElementById('btn-lookup-ref')?.addEventListener('click', handleRefLookup);
+    ['lookup-ref-id', 'lookup-email'].forEach(id => {
+        document.getElementById(id)?.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                handleRefLookup();
+            }
+        });
+    });
 
     // Form Submission (Step 2)
     registrationForm.addEventListener('submit', handleFormSubmit);
@@ -1206,6 +1214,19 @@ function populateFormFromData(data) {
         if (el && regType.includes(key)) { el.checked = true; el.dispatchEvent(new Event('change')); }
     });
 
+    // A historical category may have been retired from current settings. Keep
+    // the saved value visible instead of silently clearing or substituting it.
+    const categorySelect = document.getElementById('attendeeCategory');
+    if (categorySelect && data.Attendee_Category &&
+        ![...categorySelect.options].some(option => option.value === data.Attendee_Category)) {
+        const archivedOption = document.createElement('option');
+        archivedOption.value = data.Attendee_Category;
+        archivedOption.textContent = data.Attendee_Category + ' (saved / no longer offered)';
+        archivedOption.dataset.categoryId = data.Attendee_Category_ID || '';
+        archivedOption.dataset.archived = 'true';
+        categorySelect.appendChild(archivedOption);
+    }
+
     // 2. Generate paper blocks before populating paper-level fields
     if (data.Number_of_Papers) {
         const numPapers = parseInt(data.Number_of_Papers) || 1;
@@ -1251,6 +1272,21 @@ function populateFormFromData(data) {
     ['attendeeRegion', 'attendeeCategory'].forEach(id => {
         const el = document.getElementById(id);
         if (el && el.value) el.dispatchEvent(new Event('change'));
+    });
+
+    // Workshop selections are stored as an ID list in current records and as
+    // a name list in legacy records. Restore either representation after the
+    // Pre-Conference toggle has rebuilt the checkbox controls.
+    const savedSessionIds = new Set(String(data.PreConf_Session_IDs || '')
+        .split(',').map(value => value.trim()).filter(Boolean));
+    const savedSessionNames = new Set(String(data.PreConf_Sessions || '')
+        .split(',').map(value => value.trim()).filter(Boolean));
+    document.querySelectorAll('.preconf-session-check').forEach(checkbox => {
+        const session = (appSettings.pre_conference_sessions || [])
+            .find(item => item.id === checkbox.dataset.sessId);
+        const shouldRestore = savedSessionIds.has(checkbox.dataset.sessId) ||
+            (session && savedSessionNames.has(session.name));
+        if (shouldRestore) checkbox.checked = true;
     });
 
     // 5. Re-populate paper fields — MUST run after Step 4 because attendeeCategory's change

@@ -78,10 +78,10 @@
                     <h4 style="margin:0 0 5px;color:var(--text-light);font-size:0.97rem;display:flex;align-items:center;gap:8px;">
                         <i class='bx bx-history' style="color:var(--accent);font-size:1.15rem;"></i>Already Registered? Reload Your Submission
                     </h4>
-                    <p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 12px;">Enter your Reference ID to reload your saved details, download your invoice, or upload your payment receipt.</p>
+                    <p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 12px;">Enter the Reference ID and email address used for the original registration. Both are required to protect your saved personal and payment details.</p>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <input type="text" id="lookup-ref-id" placeholder="E.g. SICET2026-1234567" style="flex:1;min-width:180px;padding:9px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:var(--text-light);font-size:0.9rem;outline:none;">
-                        <input type="email" id="lookup-email" placeholder="Registration email" style="flex:1;min-width:200px;padding:9px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:var(--text-light);font-size:0.9rem;outline:none;">
+                        <input type="text" id="lookup-ref-id" aria-label="Registration Reference ID" autocomplete="off" placeholder="E.g. SICET2026-1234567" style="flex:1;min-width:180px;padding:9px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:var(--text-light);font-size:0.9rem;outline:none;">
+                        <input type="email" id="lookup-email" aria-label="Registration email" autocomplete="email" placeholder="Registration email" style="flex:1;min-width:200px;padding:9px 12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:var(--text-light);font-size:0.9rem;outline:none;">
                         <button type="button" id="btn-lookup-ref" class="btn btn-secondary btn-sm" style="white-space:nowrap;padding:9px 18px;">
                             <i class='bx bx-search'></i> Load Registration
                         </button>
@@ -1035,7 +1035,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=81"></script>
+    <script src="app.js?v=82"></script>
 </body>
 
 </html>
