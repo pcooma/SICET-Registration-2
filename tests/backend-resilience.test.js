@@ -7,8 +7,15 @@ const sandbox = {
   console,
   Logger: { log() {} },
   SpreadsheetApp: { flush() {} },
-  Utilities: { getUuid: () => 'test-version' }
+  MimeType: { PLAIN_TEXT: 'text/plain' },
+  Utilities: { getUuid: () => 'test-version' },
+  DriveApp: {
+    getFileById(id) {
+      return replacementFiles.find(file => file.id === id);
+    }
+  }
 };
+const replacementFiles = [];
 vm.createContext(sandbox);
 vm.runInContext(source, sandbox);
 
@@ -66,5 +73,33 @@ assert.deepEqual(
   ['SICET2026-TEST01', 'Author', 'author', 'v1', historicalSnapshot],
   'historical pricing identity and snapshot must survive sheet serialization'
 );
+
+// Model a live Drive iterator: after rename it would include the new file if
+// the implementation retained the iterator instead of materialising old IDs.
+const oldFile = { id: 'old', name: 'settings.json', trashed: false, getId() { return this.id; }, setTrashed(v) { this.trashed = v; } };
+replacementFiles.push(oldFile);
+const replacementFolder = {
+  getFilesByName(name) {
+    let cursor = 0;
+    return {
+      hasNext: () => replacementFiles.filter(file => file.name === name && !file.trashed).length > cursor,
+      next: () => replacementFiles.filter(file => file.name === name && !file.trashed)[cursor++]
+    };
+  },
+  createFile(name) {
+    const file = {
+      id: 'new', name, trashed: false,
+      getId() { return this.id; },
+      setName(nextName) { this.name = nextName; },
+      setTrashed(v) { this.trashed = v; }
+    };
+    replacementFiles.push(file);
+    return file;
+  }
+};
+sandbox.replaceJsonFileSafely(replacementFolder, 'settings.json', { version: 2 });
+assert.equal(oldFile.trashed, true, 'old canonical file should be retired');
+assert.equal(replacementFiles.find(file => file.id === 'new').trashed, false, 'new canonical file must never be trashed');
+assert.equal(replacementFiles.find(file => file.id === 'new').name, 'settings.json');
 
 console.log('backend resilience tests passed');

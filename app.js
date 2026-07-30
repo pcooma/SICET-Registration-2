@@ -2627,8 +2627,9 @@ window.removeJournal = function (index) {
     renderJournalsAdmin();
 };
 
-function saveSettings(e) {
+async function saveSettings(e) {
     e.preventDefault();
+    const previousSettings = JSON.parse(JSON.stringify(appSettings));
 
     appSettings.discounts.student_from_2nd  = Number(document.getElementById('fee_conf_student_discount').value);
     appSettings.discounts.discount_max_papers = Number(document.getElementById('fee_discount_max_papers').value) || 0;
@@ -2676,32 +2677,40 @@ function saveSettings(e) {
     saveAwardOptionsFromAdmin();
     saveExcursionOptionsFromAdmin();
 
-    // Persist locally
-    localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
+    showToast('Saving to Google Drive…', 'success');
 
-    // Re-populate globals immediately
+    // Drive is authoritative. Do not publish calculations or cache the new
+    // configuration until the backend confirms that the canonical file exists.
+    const result = await pushSettingsToDrive(appSettings);
+    if (!result?.success) {
+        appSettings = previousSettings;
+        rebuildCategoryDropdown();
+        rebuildSessionCheckboxes();
+        populateJournalsDropdown();
+        rebuildAwardCategoryDropdown();
+        rebuildAwardPurposeDropdown();
+        rebuildExcursionMobilityDropdown();
+        rebuildExcursionActivityDropdown();
+        updateCostPreviews();
+        showToast(result?.error || 'Settings were not saved to Google Drive. Your entered values remain on screen for retry.', 'error');
+        return;
+    }
+
+    if (result.settingsMeta) appSettings._meta = result.settingsMeta;
+    localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
     populateJournalsDropdown();
+    rebuildCategoryDropdown();
+    rebuildSessionCheckboxes();
     rebuildAwardCategoryDropdown();
     rebuildAwardPurposeDropdown();
     rebuildExcursionMobilityDropdown();
     rebuildExcursionActivityDropdown();
-    // Regenerate paper blocks so Paper ID visibility reflects the current APC collection state
     generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
     updateCostPreviews();
-    // Keep WhatsApp widget dropdowns in sync if they are currently visible
     const _waIssueType = document.getElementById('wa-issue-type')?.value;
     if (_waIssueType === 'award')   renderWaAwardCategory();
     if (_waIssueType === 'preconf') renderWhatsAppWorkshops();
-    showToast('Saving to Google Drive…', 'success');
-
-    // Persist to Google Drive and confirm
-    pushSettingsToDrive().then(ok => {
-        if (ok) {
-            showToast('Settings saved and synced to Google Drive.', 'success');
-        } else {
-            showToast('Settings saved locally but Drive sync failed — other users may not see your changes.', 'error');
-        }
-    });
+    showToast('Settings saved to Google Drive and applied to registration calculations.', 'success');
 }
 
 function populateJournalsDropdown() {
@@ -3475,21 +3484,28 @@ async function resolveSettings() {
     if (overlay) overlay.style.display = 'none';
 }
 
-// Push current appSettings to Google Drive — returns true on confirmed success
-async function pushSettingsToDrive() {
-    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return false;
+// Push settings to Google Drive and return the backend confirmation/error.
+async function pushSettingsToDrive(settings) {
+    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+        return { success: false, error: 'Google Drive backend is not configured.' };
+    }
     try {
         const resp = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'saveSettings', adminToken, settings: appSettings })
+            body: JSON.stringify({ action: 'saveSettings', adminToken, settings })
         });
-        if (!resp.ok) return false;
+        if (!resp.ok) return { success: false, error: 'Google Drive returned HTTP ' + resp.status + '.' };
         const json = await resp.json();
-        return json.success === true;
+        if (json.error === 'Unauthorized') {
+            adminToken = '';
+            sessionStorage.removeItem('sicet2026_admin_token');
+            return { success: false, error: 'Admin session expired. Sign in again, then retry Save Settings.' };
+        }
+        return json;
     } catch (err) {
         console.warn('Could not push settings to Drive:', err);
-        return false;
+        return { success: false, error: 'Could not connect to Google Drive. Your settings were not applied.' };
     }
 }
 
