@@ -17,9 +17,9 @@ const defaultSettings = {
     inauguration_fee: 10000,         // LKR; Student opt-in only (Local)
     inauguration_fee_usd: 30,       // USD; Student opt-in only (Non-local)
     journals: [
-        { id: 'j1', name: 'Scopus Q1', fee: 300 },
-        { id: 'j2', name: 'Scopus Q2', fee: 200 },
-        { id: 'j3', name: 'Other', fee: 100 }
+        { id: 'j1', name: 'Scopus Q1', fee: 300, apc_not_applicable: false },
+        { id: 'j2', name: 'Scopus Q2', fee: 200, apc_not_applicable: false },
+        { id: 'j3', name: 'Other', fee: 100, apc_not_applicable: false }
     ],
     pre_conference_sessions: [
         { id: 'pcs1', name: 'Quantity Surveying in the era of Digitalisation', fee_local: 10000, fee_saarc: 35, fee_nonsaarc: 50, academic_discount_pct: 0, student_discount_pct: 0 },
@@ -523,7 +523,8 @@ function generatePaperBlocks(count) {
     // Create journal options string
     let journalOptions = '<option value="" disabled selected>Select Journal</option>';
     appSettings.journals.forEach(j => {
-        journalOptions += `<option value="${j.name}" data-fee="${j.fee}">${j.name}${j.fee > 0 ? ' ($' + j.fee + ')' : ' — No APC'}</option>`;
+        const notApplicable = j.apc_not_applicable === true;
+        journalOptions += `<option value="${j.name}" data-fee="${notApplicable ? 0 : j.fee}" data-apc-not-applicable="${notApplicable}">${j.name}${notApplicable ? ' — APC not applicable' : ' ($' + j.fee + ')'}</option>`;
     });
 
     for (let i = 1; i <= count; i++) {
@@ -801,11 +802,12 @@ function _previewApcJournals(hasRgn, dispCur, toDisp) {
 
     let rows = '';
     journals.forEach(j => {
-        const fee    = hasRgn ? toDisp(j.fee, 'USD') : j.fee;
+        const notApplicable = j.apc_not_applicable === true;
+        const fee    = notApplicable ? 0 : (hasRgn ? toDisp(j.fee, 'USD') : j.fee);
         const curLbl = hasRgn ? dispCur : 'USD';
         rows += `<tr style="border-top:1px solid rgba(74,158,255,0.12);">
             <td style="padding:6px 8px 6px 0;color:var(--text-light);">${j.name}</td>
-            <td style="text-align:right;padding:6px 0;color:#4a9eff;font-weight:500;">${curLbl} ${fee?.toLocaleString('en-US')}</td>
+            <td style="text-align:right;padding:6px 0;color:#4a9eff;font-weight:500;">${notApplicable ? 'APC not applicable' : curLbl + ' ' + fee?.toLocaleString('en-US')}</td>
         </tr>`;
     });
 
@@ -1016,10 +1018,12 @@ function calculateTotalFee() {
             if (toggle.checked) {
                 const sel = document.getElementById(`journal_${i + 1}`);
                 if (sel && sel.value) {
-                    const fee = parseFloat(sel.options[sel.selectedIndex].dataset.fee) || 0;
+                    const option = sel.options[sel.selectedIndex];
+                    const notApplicable = option.dataset.apcNotApplicable === 'true';
+                    const fee = notApplicable ? 0 : (parseFloat(option.dataset.fee) || 0);
                     const disp = toDisplay(fee, 'USD');
                     displayTotal += disp;
-                    br(); breakdownText += `<span>+ P${i + 1} APC (${sel.value}):</span><span>${disp} ${displayCur}</span>`;
+                    br(); breakdownText += `<span>+ P${i + 1} APC (${sel.value}):</span><span>${notApplicable ? 'Not applicable' : disp + ' ' + displayCur}</span>`;
                 }
             }
         });
@@ -1597,8 +1601,14 @@ function generateInvoice() {
                 const apcToggle = document.getElementById(`includeApc_${i}`);
                 const journalSel = document.getElementById(`journal_${i}`);
                 if (apcToggle?.checked && journalSel?.value) {
-                    const apcFee = parseFloat(journalSel.options[journalSel.selectedIndex].dataset.fee) || 0;
-                    addItem(`  APC — P${i}: ${journalSel.value}`, apcFee, 'USD');
+                    const selectedJournal = journalSel.options[journalSel.selectedIndex];
+                    const notApplicable = selectedJournal.dataset.apcNotApplicable === 'true';
+                    const apcFee = notApplicable ? 0 : (parseFloat(selectedJournal.dataset.fee) || 0);
+                    addItem(
+                        `  APC — P${i}: ${journalSel.value}${notApplicable ? ' (not applicable)' : ''}`,
+                        notApplicable ? null : apcFee,
+                        'USD'
+                    );
                 }
             }
             if (paperNotes.length > 0) addItem('  Papers: ' + paperNotes.join(' | '), null, nativeCur);
@@ -2608,16 +2618,26 @@ function renderJournalsAdmin() {
             </div>
             <div class="input-field col">
                 <label>Fee (USD)</label>
-                <input type="number" class="journal-fee" value="${j.fee}" required>
+                <input type="number" class="journal-fee" value="${j.apc_not_applicable ? 0 : j.fee}" min="0" ${j.apc_not_applicable ? 'disabled' : ''} required>
             </div>
+            <label style="display:flex;align-items:center;gap:7px;padding:0 8px 9px;white-space:nowrap;font-size:0.82rem;cursor:pointer;">
+                <input type="checkbox" class="journal-apc-na" ${j.apc_not_applicable ? 'checked' : ''}>
+                APC not applicable
+            </label>
             <button type="button" class="btn-remove-journal" onclick="removeJournal(${index})"><i class='bx bx-trash'></i></button>
         `;
+        const naCheckbox = div.querySelector('.journal-apc-na');
+        const feeInput = div.querySelector('.journal-fee');
+        naCheckbox.addEventListener('change', () => {
+            feeInput.disabled = naCheckbox.checked;
+            if (naCheckbox.checked) feeInput.value = 0;
+        });
         list.appendChild(div);
     });
 }
 
 function addJournalField() {
-    appSettings.journals.push({ id: 'j' + Date.now(), name: '', fee: 0 });
+    appSettings.journals.push({ id: 'j' + Date.now(), name: '', fee: 0, apc_not_applicable: false });
     renderJournalsAdmin();
 }
 
@@ -2660,10 +2680,12 @@ async function saveSettings(e) {
     for (let i = 0; i < jNames.length; i++) {
         if (jNames[i].value.trim() !== '') {
             const row = jNames[i].closest('.journal-entry');
+            const notApplicable = row?.querySelector('.journal-apc-na')?.checked === true;
             newJournals.push({
                 id: row?.dataset?.itemId || 'j' + Date.now() + '_' + i,
                 name: jNames[i].value.trim(),
-                fee: Number(jFees[i].value)
+                fee: notApplicable ? 0 : Number(jFees[i].value),
+                apc_not_applicable: notApplicable
             });
         }
     }
@@ -2722,8 +2744,9 @@ function populateJournalsDropdown() {
     appSettings.journals.forEach(j => {
         const opt = document.createElement('option');
         opt.value = j.name;
-        opt.dataset.fee = j.fee;
-        opt.textContent = `${j.name} ($${j.fee})`;
+        opt.dataset.fee = j.apc_not_applicable ? 0 : j.fee;
+        opt.dataset.apcNotApplicable = j.apc_not_applicable === true;
+        opt.textContent = j.apc_not_applicable ? `${j.name} — APC not applicable` : `${j.name} ($${j.fee})`;
         journalSelect.appendChild(opt);
     });
 }
@@ -3414,6 +3437,13 @@ function mergeWithDefaults(stored) {
                 academic_discount_pct: 0,
                 student_discount_pct:  0,
                 ...sess
+            }));
+        } else if (key === 'journals') {
+            // Older settings did not distinguish a genuine zero fee from APC
+            // being structurally inapplicable. Preserve old behavior by default.
+            base.journals = (stored.journals || []).map(journal => ({
+                apc_not_applicable: false,
+                ...journal
             }));
         } else if (
             typeof base[key] === 'object' && base[key] !== null && !Array.isArray(base[key]) &&

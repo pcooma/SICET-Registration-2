@@ -27,11 +27,18 @@ const validSettings = {
   pre_conference_sessions: [
     { id: 'pcs1', name: 'Workshop A', fee_local: 10000, fee_saarc: 35, fee_nonsaarc: 50 }
   ],
-  journals: [{ id: 'j1', name: 'Scopus Q1', fee: 300 }],
+  journals: [{ id: 'j1', name: 'Scopus Q1', fee: 300, apc_not_applicable: false }],
   usd_to_lkr: 320
 };
 
 assert.equal(sandbox.validateSettings(validSettings).valid, true, 'valid settings should pass');
+
+const noApcSettings = JSON.parse(JSON.stringify(validSettings));
+noApcSettings.journals[0].apc_not_applicable = true;
+noApcSettings.journals[0].fee = 300;
+const noApcResult = sandbox.validateSettings(noApcSettings);
+assert.equal(noApcResult.valid, true, 'APC-not-applicable journal should be accepted');
+assert.equal(noApcResult.settings.journals[0].fee, 0, 'backend must force inapplicable APC fee to zero');
 
 const afterDeletion = JSON.parse(JSON.stringify(validSettings));
 afterDeletion.categories.splice(0, 1);
