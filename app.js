@@ -702,6 +702,14 @@ function validateActiveProductSelections() {
             return false;
         }
     }
+    if (document.getElementById('toggleAward')?.checked) {
+        const count = Number(document.getElementById('participantCount')?.value);
+        if (!Number.isInteger(count) || count < 1) {
+            showToast('Excellence Award registration requires at least one participant.', 'error');
+            document.getElementById('participantCount')?.focus();
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1154,7 +1162,8 @@ function calculateTotalFee() {
 
     // 2. Excellence Award (LKR)
     if (isAward) {
-        const pax = parseInt(document.getElementById('participantCount').value) || 1;
+        const rawPax = Number(document.getElementById('participantCount').value);
+        const pax = Number.isInteger(rawPax) && rawPax >= 1 ? rawPax : 1;
         const awardTotal = appSettings.award_fee * pax;
         const disp = toDisplay(awardTotal, 'LKR');
         displayTotal += disp;
@@ -1798,7 +1807,8 @@ function generateInvoice() {
     }
 
     if (isAward) {
-        const pax = parseInt(document.getElementById('participantCount').value) || 1;
+        const rawPax = Number(document.getElementById('participantCount').value);
+        const pax = Number.isInteger(rawPax) && rawPax >= 1 ? rawPax : 1;
         const names = document.getElementById('participantNames').value || '';
         const awardCat = document.getElementById('awardCategory').value || '';
         addItem(`Excellence Award — ${awardCat || 'Category TBD'} (${pax} pax)`, appSettings.award_fee * pax, 'LKR');
