@@ -4,7 +4,7 @@
  * HOW TO DEPLOY:
  * 1. Open https://script.google.com and create a new project named "SICET2026 Registration"
  * 2. Paste this entire file into Code.gs
- * 3. Change ADMIN_KEY below to a secret key of your choice
+ * 3. In Project Settings > Script properties set ADMIN_PASSWORD and, optionally, ADMIN_EMAIL
  * 4. Click Deploy → New deployment → Web app
  *    - Execute as: Me
  *    - Who has access: Anyone
@@ -24,7 +24,77 @@
 
 const MAIN_FOLDER_ID    = '1REXNutSF3mzO7tRkg0tD0GjLqjUlhI-n';
 const MASTER_SHEET_NAME = 'SICET2026 Master Registrations';
-const ADMIN_KEY         = 'sicet2026admin'; // Change this to something secret
+// Secrets must be stored in Apps Script > Project Settings > Script properties.
+// Required: ADMIN_PASSWORD. Optional: ADMIN_EMAIL (defaults to the conference admin).
+const ADMIN_EMAIL_DEFAULT = 'p.cooma@gmail.com';
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const ALLOWED_UPLOAD_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+const SETTINGS_FILE_NAME = 'sicet2026_settings.json';
+const SETTINGS_HISTORY_FOLDER_NAME = 'Settings History';
+const RECORD_SCHEMA_VERSION = 2;
+const MASTER_HEADERS = [
+  'Submission_Date', 'Invoice_ID', 'Status',
+  'Title', 'Full_Name', 'Email', 'Phone',
+  'Organization', 'Attendee_Region', 'Country', 'Attendee_Category',
+  'Registration_Type', 'Calculated_Total_Fee', 'Currency',
+  'Certificate_Name', 'Designation', 'Food_Preference', 'Number_of_Papers',
+  'Include_Inauguration',
+  'Company_Name', 'Participant_Count', 'Participant_Names', 'Award_Category',
+  'Primary_Reason', 'Primary_Reason_Other',
+  'Excursion_Local_Count', 'Excursion_Foreign_Count',
+  'Excursion_Mobility', 'Excursion_Activity',
+  'PreConf_Sessions', 'Workshop_Discount_Tier', 'Workshop_ID_File',
+  'Address', 'Bill_To', 'Billing_Org_Name', 'Billing_Tax_ID',
+  'Billing_Address', 'Billing_Finance_Email',
+  'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL',
+  // Append-only evolution fields. Never rename/remove older columns.
+  'Record_Schema_Version', 'Settings_Version', 'Attendee_Category_ID',
+  'PreConf_Session_IDs', 'Pricing_Snapshot'
+];
+
+/**
+ * ONE-TIME MANUAL MIGRATION
+ * Run this function once from the Apps Script editor before deploying the new
+ * web-app version. It only appends missing headers to the existing master sheet;
+ * it never deletes, reorders, or overwrites existing columns or registration rows.
+ */
+function migrateMasterSheetSchema() {
+  const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+  const files = mainFolder.getFilesByName(MASTER_SHEET_NAME);
+  if (!files.hasNext()) {
+    return { success: true, message: 'No master sheet exists yet; the full schema will be created on first submission.', added: [] };
+  }
+
+  const sheet = SpreadsheetApp.openById(files.next().getId()).getActiveSheet();
+  const result = ensureMasterSheetSchema(sheet);
+  Logger.log(JSON.stringify(result));
+  return result;
+}
+
+function ensureMasterSheetSchema(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  const existing = lastColumn > 0
+    ? sheet.getRange(1, 1, 1, lastColumn).getValues()[0].map(String)
+    : [];
+  const duplicates = existing.filter(function(header, index) {
+    return header && existing.indexOf(header) !== index;
+  });
+  if (duplicates.length) {
+    throw new Error('Master sheet has duplicate headers: ' + duplicates.join(', ') + '. Resolve these manually before writing.');
+  }
+  const missing = MASTER_HEADERS.filter(function(header) { return existing.indexOf(header) < 0; });
+  if (missing.length) {
+    sheet.getRange(1, lastColumn + 1, 1, missing.length).setValues([missing]);
+    SpreadsheetApp.flush();
+  }
+  return {
+    success: true,
+    existingColumnCount: existing.length,
+    addedColumnCount: missing.length,
+    finalColumnCount: existing.length + missing.length,
+    added: missing
+  };
+}
 
 // ---------------------------------------------------------------------------
 // POST — handles all write actions from the frontend
@@ -41,6 +111,8 @@ function doPost(e) {
   try {
     const data   = JSON.parse(e.postData.contents);
     const action = data.action || 'submitRegistration';
+
+    if (action === 'adminLogin') return handleAdminLogin(data);
 
     if (action === 'saveInvoice') {
       return handleSaveInvoice(data);
@@ -64,10 +136,10 @@ function doPost(e) {
 // ---------------------------------------------------------------------------
 function doGet(e) {
   const action = (e.parameter && e.parameter.action) || '';
-  const key    = (e.parameter && e.parameter.key)    || '';
+  const token  = (e.parameter && e.parameter.token)  || '';
 
   if (action === 'getSubmissions') {
-    if (key !== ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' });
+    if (!verifyAdminToken(token)) return jsonResponse({ error: 'Unauthorized' });
     try {
       const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
       return jsonResponse({ success: true, submissions: getSubmissionsFromSheet(mainFolder) });
@@ -78,9 +150,13 @@ function doGet(e) {
 
   if (action === 'getRegistrationByRef') {
     const ref = (e.parameter && e.parameter.ref) || '';
-    if (!ref) return jsonResponse({ error: 'No reference ID provided' });
+    const email = (e.parameter && e.parameter.email) || '';
+    if (!ref || !email) return jsonResponse({ error: 'Reference ID and email are required' });
     try {
       const data = getRegistrationByRef(ref);
+      if (normaliseEmail(data.Email) !== normaliseEmail(email)) {
+        return jsonResponse({ success: false, error: 'Reference ID and email do not match' });
+      }
       return jsonResponse({ success: true, data: data });
     } catch (err) {
       return jsonResponse({ success: false, error: err.toString() });
@@ -102,7 +178,7 @@ function doGet(e) {
   }
 
   if (action === 'getPaymentProofs') {
-    if (key !== ADMIN_KEY) return jsonResponse({ error: 'Unauthorized' });
+    if (!verifyAdminToken(token)) return jsonResponse({ error: 'Unauthorized' });
     const ref = (e.parameter && e.parameter.ref) || '';
     if (!ref) return jsonResponse({ error: 'No ref provided' });
     try {
@@ -142,11 +218,19 @@ function doGet(e) {
 function handleSubmitRegistration(data) {
   const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
 
+  const validation = validateRegistration(data, mainFolder);
+  if (!validation.valid) return jsonResponse({ success: false, error: validation.errors.join(' ') });
+  data = validation.data;
+
   // Server-side deduplication: if no Invoice_ID supplied, check sheet for existing row with same email
   if (!data.Invoice_ID) {
     const existingId = findInvoiceIdByEmail(data.Email, mainFolder);
     data.Invoice_ID = existingId || generateInvoiceId();
   }
+
+  // Freeze the pricing definition used for this record. A later category,
+  // workshop, discount, or fee deletion must never reinterpret old invoices.
+  data = attachPricingSnapshot(data, mainFolder);
 
   const nameParts = (data.Full_Name || 'Unknown').trim().split(/\s+/);
   const lastName  = nameParts[nameParts.length - 1].replace(/[^a-zA-Z0-9]/g, '') || 'Attendee';
@@ -154,12 +238,7 @@ function handleSubmitRegistration(data) {
 
   // Find or create the registrant's sub-folder
   let userFolder;
-  const existingFolders = mainFolder.getFoldersByName(folderName);
-  if (existingFolders.hasNext()) {
-    userFolder = existingFolders.next();
-  } else {
-    userFolder = mainFolder.createFolder(folderName);
-  }
+  userFolder = findFolderByRef(mainFolder, data.Invoice_ID) || mainFolder.createFolder(folderName);
 
   const folderUrl = userFolder.getUrl();
 
@@ -186,9 +265,8 @@ function handleSubmitRegistration(data) {
 
   data.Drive_Folder_URL = folderUrl;
 
-  // Overwrite registration_data.json with latest version
-  deleteFilesByName(userFolder, 'registration_data.json');
-  userFolder.createFile('registration_data.json', JSON.stringify(data, null, 2), MimeType.PLAIN_TEXT);
+  // Safe replacement: create the new copy before retiring the last good copy.
+  replaceJsonFileSafely(userFolder, 'registration_data.json', data);
 
   // Upsert row in master sheet
   upsertMasterSheet(data, mainFolder, folderUrl);
@@ -208,12 +286,13 @@ function handleSaveInvoice(data) {
 
   // Find or create folder
   let userFolder;
-  const existingFolders = mainFolder.getFoldersByName(folderName);
-  if (existingFolders.hasNext()) {
-    userFolder = existingFolders.next();
-  } else {
-    userFolder = mainFolder.createFolder(folderName);
+  if (!isValidRef(data.Invoice_ID) || !data.Email) return jsonResponse({ success: false, error: 'Valid reference ID and email required' });
+  const existing = findFolderByRef(mainFolder, data.Invoice_ID);
+  if (existing) {
+    const saved = getRegistrationByRef(data.Invoice_ID);
+    if (normaliseEmail(saved.Email) !== normaliseEmail(data.Email)) return jsonResponse({ success: false, error: 'Reference ID and email do not match' });
   }
+  userFolder = existing || mainFolder.createFolder(folderName);
 
   if (data.invoice_pdf && data.invoice_pdf.data) {
     // Determine next version number
@@ -240,7 +319,7 @@ function handleSaveInvoice(data) {
 // handleSaveSettings — persist admin settings JSON to Drive
 // ---------------------------------------------------------------------------
 function handleSaveSettings(data) {
-  if (data.adminKey !== ADMIN_KEY) {
+  if (!verifyAdminToken(data.adminToken)) {
     return jsonResponse({ success: false, error: 'Unauthorized' });
   }
   if (!data.settings) {
@@ -248,17 +327,213 @@ function handleSaveSettings(data) {
   }
   try {
     const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
-    deleteFilesByName(mainFolder, 'sicet2026_settings.json');
-    mainFolder.createFile(
-      'sicet2026_settings.json',
-      JSON.stringify(data.settings, null, 2),
+    const checked = validateSettings(data.settings);
+    if (!checked.valid) return jsonResponse({ success: false, error: checked.errors.join(' ') });
+
+    const settings = checked.settings;
+    const version = Utilities.getUuid();
+    settings._meta = {
+      schema_version: 2,
+      version: version,
+      saved_at: new Date().toISOString()
+    };
+
+    // Immutable audit copy first; current file is replaced only after that succeeds.
+    const historyFolder = getOrCreateChildFolder(mainFolder, SETTINGS_HISTORY_FOLDER_NAME);
+    historyFolder.createFile(
+      'settings_' + settings._meta.saved_at.replace(/[:.]/g, '-') + '_' + version + '.json',
+      JSON.stringify(settings, null, 2),
       MimeType.PLAIN_TEXT
     );
-    return jsonResponse({ success: true });
+    replaceJsonFileSafely(mainFolder, SETTINGS_FILE_NAME, settings);
+    return jsonResponse({ success: true, version: version });
   } catch (err) {
     Logger.log('handleSaveSettings error: ' + err.toString());
     return jsonResponse({ success: false, error: err.toString() });
   }
+}
+
+function validateSettings(input) {
+  const settings = JSON.parse(JSON.stringify(input || {}));
+  const errors = [];
+  validateSettingsCollection(settings.categories, 'category', 'label', errors);
+  validateSettingsCollection(settings.pre_conference_sessions || [], 'workshop', 'name', errors);
+  validateSettingsCollection(settings.journals || [], 'journal', 'name', errors);
+  if (!Array.isArray(settings.categories) || settings.categories.length === 0) {
+    errors.push('At least one attendee category is required.');
+  }
+  const rate = Number(settings.usd_to_lkr);
+  if (!isFinite(rate) || rate <= 0) errors.push('USD exchange rate must be greater than zero.');
+  validateNonNegativeNumbers(settings, '', errors);
+  return { valid: errors.length === 0, errors: errors, settings: settings };
+}
+
+function validateSettingsCollection(items, type, labelKey, errors) {
+  if (!Array.isArray(items)) {
+    errors.push('Settings ' + type + ' list is invalid.');
+    return;
+  }
+  const ids = {};
+  const labels = {};
+  items.forEach(function(item, index) {
+    const id = String((item && item.id) || '').trim();
+    const label = String((item && item[labelKey]) || '').trim();
+    if (!id) errors.push('Every ' + type + ' requires a stable ID (item ' + (index + 1) + ').');
+    if (!label) errors.push('Every ' + type + ' requires a name (item ' + (index + 1) + ').');
+    if (id && ids[id]) errors.push('Duplicate ' + type + ' ID: ' + id + '.');
+    if (label && labels[label.toLowerCase()]) errors.push('Duplicate ' + type + ' name: ' + label + '.');
+    ids[id] = true;
+    labels[label.toLowerCase()] = true;
+  });
+}
+
+function validateNonNegativeNumbers(value, path, errors) {
+  if (!value || typeof value !== 'object') return;
+  Object.keys(value).forEach(function(key) {
+    if (key === '_meta') return;
+    const child = value[key];
+    const childPath = path ? path + '.' + key : key;
+    if (typeof child === 'number' && (!isFinite(child) || child < 0)) {
+      errors.push(childPath + ' must be a non-negative number.');
+    } else if (child && typeof child === 'object') {
+      validateNonNegativeNumbers(child, childPath, errors);
+    }
+  });
+}
+
+function handleAdminLogin(data) {
+  const props = PropertiesService.getScriptProperties();
+  const expectedPassword = props.getProperty('ADMIN_PASSWORD');
+  const expectedEmail = normaliseEmail(props.getProperty('ADMIN_EMAIL') || ADMIN_EMAIL_DEFAULT);
+  if (!expectedPassword) return jsonResponse({ success: false, error: 'Admin login is not configured' });
+  if (normaliseEmail(data.email) !== expectedEmail || String(data.password || '') !== expectedPassword) {
+    return jsonResponse({ success: false, error: 'Invalid credentials' });
+  }
+  const expires = Date.now() + 8 * 60 * 60 * 1000;
+  const payload = Utilities.base64EncodeWebSafe(expectedEmail + '|' + expires);
+  const sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, expectedPassword));
+  return jsonResponse({ success: true, token: payload + '.' + sig, expires: expires });
+}
+
+function verifyAdminToken(token) {
+  const password = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD');
+  if (!password || !token || token.indexOf('.') < 0) return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const expected = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(parts[0], password));
+  if (expected !== parts[1]) return false;
+  try {
+    const decoded = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString();
+    const expires = Number(decoded.split('|').pop());
+    return isFinite(expires) && Date.now() < expires;
+  } catch (_) { return false; }
+}
+
+function normaliseEmail(value) { return String(value || '').trim().toLowerCase(); }
+function isValidRef(value) { return /^SICET2026-[A-Za-z0-9-]{6,30}$/.test(String(value || '')); }
+
+function findFolderByRef(mainFolder, refId) {
+  const folders = mainFolder.getFolders();
+  while (folders.hasNext()) {
+    const folder = folders.next();
+    if (folder.getName().indexOf(refId + '_') === 0) return folder;
+  }
+  return null;
+}
+
+function validateUpload(fileObj, label, errors) {
+  if (!fileObj || !fileObj.data) return;
+  const estimatedBytes = Math.floor(String(fileObj.data).length * 0.75);
+  if (estimatedBytes > MAX_UPLOAD_BYTES) errors.push(label + ' exceeds 5 MB.');
+  if (ALLOWED_UPLOAD_MIME.indexOf(String(fileObj.mimeType || '').toLowerCase()) < 0) errors.push(label + ' has an unsupported file type.');
+}
+
+function validateRegistration(input, mainFolder) {
+  const data = Object.assign({}, input || {});
+  const errors = [];
+  ['Full_Name','Email','Phone','Organization','Attendee_Region','Country','Attendee_Category','Registration_Type'].forEach(function(k) {
+    if (!String(data[k] || '').trim()) errors.push(k.replace(/_/g, ' ') + ' is required.');
+  });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.Email || ''))) errors.push('A valid email is required.');
+  if (['Local','SAARC','Non-SAARC'].indexOf(data.Attendee_Region) < 0) errors.push('Invalid attendee region.');
+  if (!isValidRef(data.Invoice_ID)) errors.push('Invalid reference ID.');
+  const existing = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
+  if (existing) {
+    try {
+      const saved = getRegistrationByRef(data.Invoice_ID);
+      if (normaliseEmail(saved.Email) !== normaliseEmail(data.Email)) errors.push('Reference ID and email do not match.');
+    } catch (_) { errors.push('Existing registration could not be verified.'); }
+  }
+  validateUpload(data.Student_ID_Base64, 'Student ID', errors);
+  validateUpload(data.Workshop_ID_Base64, 'Workshop ID', errors);
+  const proofs = Array.isArray(data.Payment_Proof_Base64) ? data.Payment_Proof_Base64 : [data.Payment_Proof_Base64];
+  proofs.forEach(function(p, i) { validateUpload(p, 'Payment proof ' + (i + 1), errors); });
+  const quotedTotal = Number(String(data.Calculated_Total_Fee || '0').replace(/,/g, ''));
+  const hasPaymentProof = proofs.some(function(p) { return p && p.data; }) || data.Payment_Proof_Base64 === '(uploaded — see folder)';
+  data.Status = quotedTotal > 0 ? (hasPaymentProof ? 'Payment Proof Submitted' : 'Pending Payment') : 'Submitted';
+  data.Submission_Date = new Date().toISOString();
+  return { valid: errors.length === 0, errors: errors, data: data };
+}
+
+function readCurrentSettings(mainFolder) {
+  const files = mainFolder.getFilesByName(SETTINGS_FILE_NAME);
+  if (!files.hasNext()) throw new Error('No pricing settings file found. Ask an administrator to save settings first.');
+  return JSON.parse(files.next().getBlob().getDataAsString());
+}
+
+function attachPricingSnapshot(data, mainFolder) {
+  const settings = readCurrentSettings(mainFolder);
+  const categories = settings.categories || [];
+  const category = categories.find(function(item) {
+    return (data.Attendee_Category_ID && item.id === data.Attendee_Category_ID) ||
+      item.label === data.Attendee_Category;
+  });
+  const existingFolder = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
+
+  if (!category && existingFolder) {
+    // A returning registrant may legitimately reference a category that has
+    // since been retired. Preserve its immutable snapshot instead of applying
+    // a different live category or deleting historical meaning.
+    const saved = getRegistrationByRef(data.Invoice_ID);
+    if (saved.Pricing_Snapshot) {
+      data.Record_Schema_Version = saved.Record_Schema_Version || RECORD_SCHEMA_VERSION;
+      data.Settings_Version = saved.Settings_Version || '';
+      data.Attendee_Category_ID = saved.Attendee_Category_ID || '';
+      data.PreConf_Session_IDs = data.PreConf_Session_IDs || saved.PreConf_Session_IDs || '';
+      data.Pricing_Snapshot = saved.Pricing_Snapshot;
+      return data;
+    }
+  }
+  if (!category) throw new Error('Selected attendee category is no longer available. Refresh and choose an active category.');
+
+  const requestedSessionIds = String(data.PreConf_Session_IDs || '').split(',').map(function(id) {
+    return id.trim();
+  }).filter(Boolean);
+  const requestedSessionNames = String(data.PreConf_Sessions || '').split(',').map(function(name) {
+    return name.trim();
+  }).filter(Boolean);
+  const selectedSessions = (settings.pre_conference_sessions || []).filter(function(session) {
+    return requestedSessionIds.indexOf(session.id) >= 0 || requestedSessionNames.indexOf(session.name) >= 0;
+  });
+
+  data.Record_Schema_Version = RECORD_SCHEMA_VERSION;
+  data.Settings_Version = settings._meta && settings._meta.version || 'legacy-unversioned';
+  data.Attendee_Category_ID = category.id;
+  data.PreConf_Session_IDs = selectedSessions.map(function(session) { return session.id; }).join(', ');
+  data.Pricing_Snapshot = JSON.stringify({
+    settings_version: data.Settings_Version,
+    captured_at: new Date().toISOString(),
+    category: category,
+    discounts: settings.discounts || {},
+    award_fee: settings.award_fee || 0,
+    inauguration_fee: settings.inauguration_fee || 0,
+    inauguration_fee_usd: settings.inauguration_fee_usd || 0,
+    excursion_fees: settings.excursion_fees || {},
+    selected_workshops: selectedSessions,
+    journals: settings.journals || [],
+    usd_to_lkr: settings.usd_to_lkr || 0
+  });
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,25 +549,11 @@ function upsertMasterSheet(data, mainFolder, folderUrl) {
     const ssFile = DriveApp.getFileById(spreadsheet.getId());
     mainFolder.addFile(ssFile);
     DriveApp.getRootFolder().removeFile(ssFile);
-    spreadsheet.getActiveSheet().appendRow([
-      'Submission_Date', 'Invoice_ID', 'Status',
-      'Title', 'Full_Name', 'Email', 'Phone',
-      'Organization', 'Attendee_Region', 'Country', 'Attendee_Category',
-      'Registration_Type', 'Calculated_Total_Fee', 'Currency',
-      'Certificate_Name', 'Designation', 'Food_Preference', 'Number_of_Papers',
-      'Include_Inauguration',
-      'Company_Name', 'Participant_Count', 'Participant_Names', 'Award_Category',
-      'Primary_Reason', 'Primary_Reason_Other',
-      'Excursion_Local_Count', 'Excursion_Foreign_Count',
-      'Excursion_Mobility', 'Excursion_Activity',
-      'PreConf_Sessions', 'Workshop_Discount_Tier', 'Workshop_ID_File',
-      'Address', 'Bill_To', 'Billing_Org_Name', 'Billing_Tax_ID',
-      'Billing_Address', 'Billing_Finance_Email',
-      'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL'
-    ]);
+    spreadsheet.getActiveSheet().appendRow(MASTER_HEADERS);
   }
 
   const sheet  = spreadsheet.getActiveSheet();
+  ensureMasterSheetSchema(sheet);
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const idCol   = headers.indexOf('Invoice_ID');
@@ -354,7 +615,12 @@ function buildRow(headers, data, folderUrl) {
     Billing_Finance_Email: data.Billing_Finance_Email  || '',
     Transaction_Ref:       data.Transaction_Ref        || '',
     Additional_Info:       data.Additional_Info        || '',
-    Drive_Folder_URL:      folderUrl                   || ''
+    Drive_Folder_URL:      folderUrl                   || '',
+    Record_Schema_Version: data.Record_Schema_Version  || '',
+    Settings_Version:      data.Settings_Version       || '',
+    Attendee_Category_ID:  data.Attendee_Category_ID   || '',
+    PreConf_Session_IDs:   data.PreConf_Session_IDs    || '',
+    Pricing_Snapshot:      data.Pricing_Snapshot       || ''
   };
   return headers.map(h => map[h] !== undefined ? map[h] : (data[h] || ''));
 }
@@ -371,6 +637,22 @@ function saveFileToFolder(folder, prefix, fileObj) {
 function deleteFilesByName(folder, name) {
   const files = folder.getFilesByName(name);
   while (files.hasNext()) files.next().setTrashed(true);
+}
+
+function replaceJsonFileSafely(folder, targetName, value) {
+  const tempName = targetName + '.new.' + Utilities.getUuid();
+  // Capture the old-file iterator before the new file receives the target
+  // name, so the new copy can never be included in the retirement loop.
+  const oldFiles = folder.getFilesByName(targetName);
+  const temp = folder.createFile(tempName, JSON.stringify(value, null, 2), MimeType.PLAIN_TEXT);
+  temp.setName(targetName);
+  while (oldFiles.hasNext()) oldFiles.next().setTrashed(true);
+  return temp;
+}
+
+function getOrCreateChildFolder(parent, name) {
+  const folders = parent.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : parent.createFolder(name);
 }
 
 function getSubmissionsFromSheet(mainFolder) {
