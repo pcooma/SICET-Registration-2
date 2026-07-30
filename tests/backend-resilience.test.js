@@ -176,4 +176,21 @@ const zeroExcursionRegistration = sandbox.validateRegistration(Object.assign({},
 assert.equal(zeroExcursionRegistration.valid, false, 'active excursion must include at least one participant');
 assert.ok(Array.from(zeroExcursionRegistration.errors).includes('Excursion registration requires at least one participant.'));
 
+['-2', '0', '1.5', 'not-a-number'].forEach(participantCount => {
+  const invalidAwardRegistration = sandbox.validateRegistration(Object.assign({}, baseRegistration, {
+    Registration_Type: 'Award',
+    Participant_Count: participantCount
+  }), emptyFolder);
+  assert.equal(invalidAwardRegistration.valid, false, `award participant count ${participantCount} must be rejected`);
+  assert.ok(Array.from(invalidAwardRegistration.errors).includes(
+    'Excellence Award registration requires at least one participant.'
+  ));
+});
+
+const validAwardRegistration = sandbox.validateRegistration(Object.assign({}, baseRegistration, {
+  Registration_Type: 'Award',
+  Participant_Count: '2'
+}), emptyFolder);
+assert.equal(validAwardRegistration.valid, true, 'positive whole-number award participant count must be accepted');
+
 console.log('backend resilience tests passed');

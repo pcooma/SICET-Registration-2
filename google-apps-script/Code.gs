@@ -474,6 +474,12 @@ function validateRegistration(input, mainFolder) {
       errors.push('Excursion registration requires at least one participant.');
     }
   }
+  if (registrationTypes.indexOf('Award') >= 0) {
+    const awardCount = Number(data.Participant_Count || 0);
+    if (!isFinite(awardCount) || Math.floor(awardCount) !== awardCount || awardCount < 1) {
+      errors.push('Excellence Award registration requires at least one participant.');
+    }
+  }
   const existing = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
   if (existing) {
     try {
