@@ -96,6 +96,7 @@ let appSettings = JSON.parse(JSON.stringify(defaultSettings)); // resolved prope
 let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
 let paymentProofFiles = []; // Managed array for multi-file proof of payment upload
 let paymentProofPreviouslyUploaded = false; // true when loaded record already has proof on server
+let studentIdPreviouslyUploaded = false; // true when loaded record already has student ID on server
 let workshopIdPreviouslyUploaded = false; // true when loaded record already has workshop ID on server
 let isZeroFeeRegistration = false; // true when calculated grand total is 0 (e.g. 100% student discount)
 
@@ -241,7 +242,7 @@ function setupEventListeners() {
                 if (!numberOfPapersInput.value || numberOfPapersInput.value === '0') numberOfPapersInput.value = 1;
             }
             if (studentIdSection) studentIdSection.classList.remove('hidden');
-            if (studentIdField) studentIdField.required = true;
+            if (studentIdField) studentIdField.required = !studentIdPreviouslyUploaded && !studentIdField.files?.length;
             if (studentRequired) studentRequired.classList.remove('hidden');
             if (designationGroup) designationGroup.classList.add('hidden');
             showInauguration();
@@ -295,6 +296,8 @@ function setupEventListeners() {
         if (file && file.size > 5 * 1024 * 1024) { // 5MB
             showToast('File size must not exceed 5MB', 'error');
             e.target.value = '';
+        } else if (file) {
+            studentIdPreviouslyUploaded = false; // the new upload replaces the saved proof
         }
     });
 
@@ -596,9 +599,13 @@ function updateExcursionTicketVisibility() {
         if (isLocal) {
             localGroup.classList.remove('hidden');
             foreignGroup.classList.add('hidden');
+            const foreignCount = document.getElementById('excursionForeignCount');
+            if (foreignCount) foreignCount.value = 0;
         } else if (region) {
             foreignGroup.classList.remove('hidden');
             localGroup.classList.add('hidden');
+            const localCount = document.getElementById('excursionLocalCount');
+            if (localCount) localCount.value = 0;
         } else {
             // No region set yet — show both groups so the user can pick
             localGroup.classList.remove('hidden');
@@ -989,6 +996,12 @@ function calculateTotalFee() {
             if (catDef?.is_workshop_only) {
                 // Workshop Attendee: no conference base fee — cost is purely per workshop selected
                 br(); breakdownText += `<span>Conference Attendance (Workshop Attendee):</span><span>— fees via workshops</span>`;
+            } else if (catDef?.no_papers) {
+                // Non-presenting categories always pay one flat registration fee,
+                // regardless of stale/imported Number_of_Papers state.
+                const confTotal = baseFee;
+                br(); breakdownText += `<span>Conference Registration (flat, no papers):</span><span>${toDisplay(confTotal, nativeCur).toLocaleString('en-US')} ${displayCur}</span>`;
+                displayTotal += toDisplay(confTotal, nativeCur);
             } else {
                 const hasPaperDiscount = catDef?.paper_discount || false;
                 const maxP = appSettings.discounts.discount_max_papers || 0;
@@ -1144,6 +1157,25 @@ function collectFormData(refId) {
     dataObj['PreConf_Sessions'] = selectedSessionNames.join(', ');
     dataObj['PreConf_Session_IDs'] = selectedSessionIds.join(', ');
     dataObj['Workshop_Discount_Tier'] = document.getElementById('workshopDiscountTier')?.value || 'regular';
+
+    // Normalize conditional fields at the submission boundary. Hidden or
+    // imported stale values must not become operational commitments.
+    const categoryDef = (appSettings.categories || []).find(category =>
+        category.id === dataObj.Attendee_Category_ID || category.label === dataObj.Attendee_Category);
+    if (categoryDef?.no_papers || categoryDef?.is_workshop_only) {
+        dataObj['Number_of_Papers'] = '0';
+    }
+    if (!categoryDef?.is_student) {
+        delete dataObj['Include_Inauguration'];
+    }
+    if (dataObj.Attendee_Region === 'Local') {
+        dataObj['Excursion_Foreign_Count'] = '0';
+    } else if (dataObj.Attendee_Region) {
+        dataObj['Excursion_Local_Count'] = '0';
+    }
+    if (studentIdPreviouslyUploaded) dataObj['Student_ID_Base64'] = '(uploaded — see folder)';
+    if (workshopIdPreviouslyUploaded) dataObj['Workshop_ID_Base64'] = '(uploaded — see folder)';
+    if (paymentProofPreviouslyUploaded) dataObj['Payment_Proof_Base64'] = '(uploaded — see folder)';
 
     return dataObj;
 }
@@ -1326,6 +1358,9 @@ function populateFormFromData(data) {
 
     // Show "previously uploaded" badge next to file inputs when files are on record
     if (data.Student_ID_Base64 === '(uploaded — see folder)') {
+        studentIdPreviouslyUploaded = true;
+        const studentIdInput = document.getElementById('studentId');
+        if (studentIdInput) studentIdInput.required = false;
         showUploadedStatus('studentId', 'Student ID previously uploaded');
     }
     if (data.Payment_Proof_Base64 === '(uploaded — see folder)') {
@@ -1378,7 +1413,11 @@ async function handleFormSubmit(e) {
     dataObj['Status'] = 'Submitted';
 
     const studentIdInput = document.getElementById('studentId');
-    if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+    if (studentIdInput?.files[0]) {
+        dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+    } else if (studentIdPreviouslyUploaded) {
+        dataObj['Student_ID_Base64'] = '(uploaded — see folder)';
+    }
 
     // Workshop discount ID validation
     const workshopTier = document.getElementById('workshopDiscountTier')?.value || 'regular';
@@ -1386,8 +1425,7 @@ async function handleFormSubmit(e) {
     const workshopIdInput = document.getElementById('workshopId');
     if (isPreConfActive && (workshopTier === 'academic' || workshopTier === 'student')) {
         // Student tier: existing conference Student ID counts as proof — no re-upload needed
-        const studentIdAlreadyHave = !!studentIdInput?.files[0] || workshopIdPreviouslyUploaded
-            || document.getElementById('student-id-status-badge') !== null;
+        const studentIdAlreadyHave = !!studentIdInput?.files[0] || studentIdPreviouslyUploaded;
         const workshopIdHave = !!workshopIdInput?.files[0] || workshopIdPreviouslyUploaded;
         if (workshopTier === 'student' && studentIdAlreadyHave) {
             // reuse conference student ID — no extra upload required
@@ -1401,9 +1439,15 @@ async function handleFormSubmit(e) {
             return;
         }
     }
-    if (workshopIdInput?.files[0]) dataObj['Workshop_ID_Base64'] = await fileToBase64(workshopIdInput.files[0]);
+    if (workshopIdInput?.files[0]) {
+        dataObj['Workshop_ID_Base64'] = await fileToBase64(workshopIdInput.files[0]);
+    } else if (workshopIdPreviouslyUploaded) {
+        dataObj['Workshop_ID_Base64'] = '(uploaded — see folder)';
+    }
 
-    dataObj['Payment_Proof_Base64'] = await Promise.all(paymentProofFiles.map(f => fileToBase64(f)));
+    dataObj['Payment_Proof_Base64'] = paymentProofFiles.length
+        ? await Promise.all(paymentProofFiles.map(f => fileToBase64(f)))
+        : (paymentProofPreviouslyUploaded ? '(uploaded — see folder)' : []);
 
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span>Submitting…</span><i class="bx bx-loader bx-spin"></i>';
@@ -1422,6 +1466,7 @@ async function handleFormSubmit(e) {
     registrationForm.reset();
     paymentProofFiles = [];
     paymentProofPreviouslyUploaded = false;
+    studentIdPreviouslyUploaded = false;
     updatePaymentProofUI();
     workshopIdPreviouslyUploaded = false;
     isZeroFeeRegistration = false;

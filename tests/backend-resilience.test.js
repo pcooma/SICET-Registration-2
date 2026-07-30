@@ -109,4 +109,16 @@ assert.equal(oldFile.trashed, true, 'old canonical file should be retired');
 assert.equal(replacementFiles.find(file => file.id === 'new').trashed, false, 'new canonical file must never be trashed');
 assert.equal(replacementFiles.find(file => file.id === 'new').name, 'settings.json');
 
+const normalizedNoPapers = sandbox.normalizeConditionalRegistration({
+  Number_of_Papers: '5',
+  Include_Inauguration: 'on',
+  Attendee_Region: 'SAARC',
+  Excursion_Local_Count: '5',
+  Excursion_Foreign_Count: '2'
+}, { no_papers: true, is_student: false, is_workshop_only: false });
+assert.equal(normalizedNoPapers.Number_of_Papers, '0', 'no-papers category must discard hidden paper count');
+assert.equal(normalizedNoPapers.Include_Inauguration, '', 'non-student category must discard inauguration opt-in');
+assert.equal(normalizedNoPapers.Excursion_Local_Count, '0', 'foreign region must discard hidden local excursion count');
+assert.equal(normalizedNoPapers.Excursion_Foreign_Count, '2');
+
 console.log('backend resilience tests passed');
