@@ -1114,14 +1114,23 @@ function collectFormData(refId) {
     if (document.getElementById('toggleExcursion').checked)  typesArr.push('Excursion');
     if (document.getElementById('togglePreConf')?.checked)   typesArr.push('Pre-Conference Workshops');
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
+    const selectedCategory = document.getElementById('attendeeCategory')?.selectedOptions?.[0];
+    dataObj['Attendee_Category_ID'] = selectedCategory?.dataset?.categoryId || '';
+    dataObj['Record_Schema_Version'] = 2;
+    dataObj['Settings_Version'] = appSettings?._meta?.version || 'legacy-unversioned';
 
     // Serialize selected pre-conference session names for the admin sheet
     const selectedSessionNames = [];
+    const selectedSessionIds = [];
     document.querySelectorAll('.preconf-session-check:checked').forEach(chk => {
         const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
-        if (sess) selectedSessionNames.push(sess.name);
+        if (sess) {
+            selectedSessionNames.push(sess.name);
+            selectedSessionIds.push(sess.id);
+        }
     });
     dataObj['PreConf_Sessions'] = selectedSessionNames.join(', ');
+    dataObj['PreConf_Session_IDs'] = selectedSessionIds.join(', ');
     dataObj['Workshop_Discount_Tier'] = document.getElementById('workshopDiscountTier')?.value || 'regular';
 
     return dataObj;
@@ -2555,6 +2564,7 @@ function renderJournalsAdmin() {
     appSettings.journals.forEach((j, index) => {
         const div = document.createElement('div');
         div.className = 'journal-entry form-group row';
+        div.dataset.itemId = j.id;
         div.innerHTML = `
             <div class="input-field col">
                 <label>Journal Name</label>
@@ -2612,9 +2622,10 @@ function saveSettings(e) {
 
     for (let i = 0; i < jNames.length; i++) {
         if (jNames[i].value.trim() !== '') {
+            const row = jNames[i].closest('.journal-entry');
             newJournals.push({
-                id: 'j' + Math.random().toString(36).substr(2, 9),
-                name: jNames[i].value,
+                id: row?.dataset?.itemId || 'j' + Date.now() + '_' + i,
+                name: jNames[i].value.trim(),
                 fee: Number(jFees[i].value)
             });
         }
@@ -2877,7 +2888,13 @@ async function loadFromGoogleDrive() {
             updateAdminDashboard();
             showToast('Loaded ' + submissions.length + ' registration(s) from Google Drive', 'success');
         } else {
-            showToast('Drive error: ' + (result.error || 'Unauthorized or not found'), 'error');
+            if (result.error === 'Unauthorized') {
+                adminToken = '';
+                sessionStorage.removeItem('sicet2026_admin_token');
+                showToast('Admin session expired or the backend password changed. Please sign in again.', 'error');
+            } else {
+                showToast('Drive error: ' + (result.error || 'Unable to load registrations'), 'error');
+            }
         }
     } catch (err) {
         showToast('Could not connect to Google Drive. Check Apps Script URL.', 'error');
@@ -3017,6 +3034,7 @@ function renderCategoriesAdmin() {
     (appSettings.categories || []).forEach((cat, idx) => {
         const div = document.createElement('div');
         div.className = 'category-entry form-group';
+        div.dataset.itemId = cat.id;
         const isWO = cat.is_workshop_only || false;
         const feeStyle = isWO ? 'opacity:0.38;pointer-events:none;' : '';
         const feeNote  = isWO ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;line-height:1.2;">Charged per<br>workshop</div>` : '';
@@ -3066,7 +3084,7 @@ function saveCategoriesFromAdmin() {
         if (!label) return;
         const isWO = row.querySelector('.cat-is-workshop-only')?.checked || false;
         cats.push({
-            id:               appSettings.categories[i]?.id || 'cat_' + Date.now() + i,
+            id:               row.dataset.itemId || 'cat_' + Date.now() + '_' + i,
             label,
             fee_local:        isWO ? 0 : (Number(row.querySelector('.cat-fee-local')?.value)    || 0),
             fee_saarc:        isWO ? 0 : (Number(row.querySelector('.cat-fee-saarc')?.value)    || 0),
@@ -3090,6 +3108,7 @@ function rebuildCategoryDropdown() {
         const opt = document.createElement('option');
         opt.value = cat.label;
         opt.textContent = cat.label;
+        opt.dataset.categoryId = cat.id;
         if (cat.label === cur) opt.selected = true;
         sel.appendChild(opt);
     });
@@ -3103,6 +3122,7 @@ function renderSessionsAdmin() {
     (appSettings.pre_conference_sessions || []).forEach((sess, idx) => {
         const div = document.createElement('div');
         div.className = 'session-entry form-group';
+        div.dataset.itemId = sess.id;
         div.style.cssText = 'display:grid;grid-template-columns:2fr 90px 90px 90px 70px 70px 36px;gap:8px;align-items:end;margin-bottom:8px;';
         div.innerHTML = `
             <div class="input-field"><label>Workshop Name</label><input type="text" class="sess-name" value="${sess.name}" required></div>
@@ -3130,26 +3150,22 @@ function addSessionField() {
 }
 
 function saveSessionsFromAdmin() {
-    const names       = document.querySelectorAll('#sessions-list .sess-name');
-    const locals      = document.querySelectorAll('#sessions-list .sess-fee-local');
-    const saarcs      = document.querySelectorAll('#sessions-list .sess-fee-saarc');
-    const nsaarcs     = document.querySelectorAll('#sessions-list .sess-fee-nonsaarc');
-    const academicPcts = document.querySelectorAll('#sessions-list .sess-academic-pct');
-    const studentPcts  = document.querySelectorAll('#sessions-list .sess-student-pct');
+    const rows = document.querySelectorAll('#sessions-list .session-entry');
     const sessions = [];
-    for (let i = 0; i < names.length; i++) {
-        if (names[i].value.trim()) {
+    rows.forEach((row, i) => {
+        const name = row.querySelector('.sess-name')?.value.trim();
+        if (name) {
             sessions.push({
-                id: appSettings.pre_conference_sessions[i]?.id || 'sess_' + Date.now() + i,
-                name: names[i].value.trim(),
-                fee_local:            Number(locals[i].value)      || 0,
-                fee_saarc:            Number(saarcs[i].value)      || 0,
-                fee_nonsaarc:         Number(nsaarcs[i].value)     || 0,
-                academic_discount_pct: Number(academicPcts[i]?.value) || 0,
-                student_discount_pct:  Number(studentPcts[i]?.value)  || 0
+                id: row.dataset.itemId || 'sess_' + Date.now() + '_' + i,
+                name,
+                fee_local:             Number(row.querySelector('.sess-fee-local')?.value) || 0,
+                fee_saarc:             Number(row.querySelector('.sess-fee-saarc')?.value) || 0,
+                fee_nonsaarc:          Number(row.querySelector('.sess-fee-nonsaarc')?.value) || 0,
+                academic_discount_pct: Number(row.querySelector('.sess-academic-pct')?.value) || 0,
+                student_discount_pct:  Number(row.querySelector('.sess-student-pct')?.value) || 0
             });
         }
-    }
+    });
     appSettings.pre_conference_sessions = sessions;
     rebuildSessionCheckboxes();
 }
@@ -3370,9 +3386,8 @@ function mergeWithDefaults(stored) {
 /**
  * Resolve the authoritative settings before the UI renders.
  * Priority: Google Drive → localStorage fallback (network failure only).
- * On first run (no Drive file yet) pushes defaultSettings to Drive.
- * If the Drive file is outdated (missing new fields) the merged version
- * is pushed back automatically so Drive stays up to date.
+ * Public page loads are read-only. Only an authenticated admin save may write
+ * settings; this avoids false Drive errors after token/authentication changes.
  */
 async function resolveSettings() {
     const overlay = document.getElementById('settings-loading-overlay');
@@ -3396,16 +3411,11 @@ async function resolveSettings() {
                     const mergedStr = JSON.stringify(merged);
                     appSettings = merged;
                     localStorage.setItem('sicet2026_settings', mergedStr);
-                    // Only push back if Drive is genuinely missing new schema keys (not just key-order diffs)
-                    const hasNewKeys = Object.keys(merged).some(k => !(k in json.settings));
-                    if (hasNewKeys) {
-                        pushSettingsToDrive();
-                    }
                 } else if (json.error === 'No settings file found') {
-                    // Genuine first run — bootstrap from defaults and create the file
+                    // Admin must explicitly save defaults; a public visitor has no write authority.
                     appSettings = mergeWithDefaults({});
                     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
-                    pushSettingsToDrive();
+                    console.warn('No Drive settings file found; using defaults until an administrator saves settings.');
                 } else {
                     // GAS returned an error — use defaults locally but don't overwrite Drive
                     appSettings = mergeWithDefaults({});

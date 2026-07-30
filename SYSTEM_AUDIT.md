@@ -105,8 +105,8 @@ Steps 1–6 are unchanged. Step 7 generates a confirmation/reference. Payment fi
 - Authentication: `handleAdminLogin`, `verifyAdminToken`
 - Registration: `handleSubmitRegistration`, `validateRegistration`, `getRegistrationByRef`
 - Files/invoices: `handleSaveInvoice`, `saveFileToFolder`, `deleteFilesByName`, `findFolderByRef`
-- Settings: `handleSaveSettings`
-- Master data: `upsertMasterSheet`, `buildRow`, `getSubmissionsFromSheet`, `findInvoiceIdByEmail`, `generateInvoiceId`
+- Settings: `handleSaveSettings`, `validateSettings`, `attachPricingSnapshot`, `replaceJsonFileSafely`
+- Master data: `upsertMasterSheet`, `ensureMasterSheetSchema`, `migrateMasterSheetSchema`, `buildRow`, `getSubmissionsFromSheet`, `findInvoiceIdByEmail`, `generateInvoiceId`
 
 ## 5. Gaps found and disposition
 
@@ -120,6 +120,22 @@ Steps 1–6 are unchanged. Step 7 generates a confirmation/reference. Payment fi
 - High: backend did not enforce upload size or MIME type.
 - High: changing a registrant name could create a second folder for the same reference.
 - Medium: workshop discount validation referenced `submitBtn` before it was initialized.
+- High: settings and registration JSON were deleted before their replacement was safely created.
+- High: category, workshop, and journal identities could drift after deletion/reordering or a settings save.
+- High: historical registrations had no immutable pricing/settings version, so later configuration changes could make an old invoice impossible to explain.
+- High: master-sheet schema repair depended on a one-time manual migration; submissions now append missing columns automatically and never remove/reorder existing columns.
+- Medium: a public settings read attempted an authenticated settings write when defaults gained a new field, producing misleading Drive/authentication errors.
+
+### Safe settings and schema evolution
+
+- Categories, workshops, and journals are configuration records with stable IDs; they are not Google Sheet columns.
+- Removing a category removes it only from future choices. Existing sheet rows, registration JSON, category label/ID, pricing snapshot, and invoice files remain.
+- Adding a category uses the existing `Attendee_Category` and `Attendee_Category_ID` columns. It does not create a category-specific column.
+- New columns are added only for new record attributes. Schema evolution is append-only: no existing heading or row is deleted, renamed, reordered, or shifted.
+- Every accepted settings save creates an immutable file in `Settings History` and safely replaces the current settings file.
+- New/updated registrations store `Record_Schema_Version`, `Settings_Version`, `Attendee_Category_ID`, `PreConf_Session_IDs`, and a compact `Pricing_Snapshot`.
+- If a returning registration uses a retired category and already has a snapshot, the backend preserves that historical snapshot rather than silently applying a different current category.
+- Duplicate IDs/names, missing IDs/names, negative numeric settings, an empty category list, and an invalid exchange rate are rejected.
 
 ### Operational gaps requiring an owner/process decision
 
@@ -135,11 +151,15 @@ Steps 1–6 are unchanged. Step 7 generates a confirmation/reference. Payment fi
 ## 6. Deployment checklist
 
 1. In Apps Script Project Settings, add `ADMIN_PASSWORD` and optionally `ADMIN_EMAIL`.
-2. Redeploy the web app as a new version; frontend and backend changes must go live together.
-3. Change the previously exposed admin password everywhere it may have been reused.
-4. Test new paid, zero-fee, returning update, wrong-email lookup, wrong admin password, expired token, oversize upload, duplicate update, settings save, dashboard read, and invoice versioning.
-5. Verify the master sheet headers and one folder/one row invariant for each reference.
-6. Confirm the current fee schedule, refund deadline, exchange rate, contacts, bank details, and dates before public launch.
+2. Paste the committed `google-apps-script/Code.gs` into the Apps Script project and save it.
+3. Run `migrateMasterSheetSchema` once. It appends missing audit columns; it does not rename/delete headings or alter existing rows. Future submissions also run the same append-only check automatically.
+4. Redeploy the web app as a new version; frontend and backend changes must go live together.
+5. Sign in again after deployment. An old token—or the retired `key=` URL parameter—correctly returns `Unauthorized`.
+6. Open Pricing Settings and click Save once. This assigns the first settings version and creates `Settings History` without changing the agreed fee values.
+7. Change the previously exposed admin password everywhere it may have been reused.
+8. Test new paid, zero-fee, returning update, wrong-email lookup, wrong admin password, expired token, oversize upload, duplicate update, settings save, dashboard read, category deletion, and invoice versioning.
+9. Verify the master sheet headers and one folder/one row invariant for each reference.
+10. Confirm the current fee schedule, refund deadline, exchange rate, contacts, bank details, and dates before public launch.
 
 ## 7. Acceptance criteria
 
