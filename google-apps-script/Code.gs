@@ -166,12 +166,12 @@ function doGet(e) {
   if (action === 'getSettings') {
     try {
       const mainFolder = DriveApp.getFolderById(MAIN_FOLDER_ID);
-      const files = mainFolder.getFilesByName('sicet2026_settings.json');
-      if (files.hasNext()) {
-        const content = files.next().getBlob().getDataAsString();
-        return jsonResponse({ success: true, settings: JSON.parse(content) });
-      }
-      return jsonResponse({ success: false, error: 'No settings file found' });
+      const result = readCurrentSettingsWithRecovery(mainFolder);
+      return jsonResponse({
+        success: true,
+        settings: result.settings,
+        recoveredFromHistory: result.recovered
+      });
     } catch (err) {
       return jsonResponse({ success: false, error: err.toString() });
     }
@@ -346,7 +346,7 @@ function handleSaveSettings(data) {
       MimeType.PLAIN_TEXT
     );
     replaceJsonFileSafely(mainFolder, SETTINGS_FILE_NAME, settings);
-    return jsonResponse({ success: true, version: version });
+    return jsonResponse({ success: true, version: version, settingsMeta: settings._meta });
   } catch (err) {
     Logger.log('handleSaveSettings error: ' + err.toString());
     return jsonResponse({ success: false, error: err.toString() });
@@ -476,9 +476,38 @@ function validateRegistration(input, mainFolder) {
 }
 
 function readCurrentSettings(mainFolder) {
+  return readCurrentSettingsWithRecovery(mainFolder).settings;
+}
+
+function readCurrentSettingsWithRecovery(mainFolder) {
   const files = mainFolder.getFilesByName(SETTINGS_FILE_NAME);
-  if (!files.hasNext()) throw new Error('No pricing settings file found. Ask an administrator to save settings first.');
-  return JSON.parse(files.next().getBlob().getDataAsString());
+  if (files.hasNext()) {
+    return {
+      settings: JSON.parse(files.next().getBlob().getDataAsString()),
+      recovered: false
+    };
+  }
+
+  // If a previous replacement was interrupted, recover the newest immutable
+  // history version and recreate the canonical current settings file.
+  const historyFolders = mainFolder.getFoldersByName(SETTINGS_HISTORY_FOLDER_NAME);
+  if (historyFolders.hasNext()) {
+    const historyFiles = historyFolders.next().getFiles();
+    let newest = null;
+    while (historyFiles.hasNext()) {
+      const candidate = historyFiles.next();
+      if (!newest || candidate.getDateCreated().getTime() > newest.getDateCreated().getTime()) {
+        newest = candidate;
+      }
+    }
+    if (newest) {
+      const recoveredSettings = JSON.parse(newest.getBlob().getDataAsString());
+      replaceJsonFileSafely(mainFolder, SETTINGS_FILE_NAME, recoveredSettings);
+      return { settings: recoveredSettings, recovered: true };
+    }
+  }
+
+  throw new Error('No pricing settings file or settings history found. Ask an administrator to save settings once.');
 }
 
 function attachPricingSnapshot(data, mainFolder) {
@@ -641,12 +670,17 @@ function deleteFilesByName(folder, name) {
 
 function replaceJsonFileSafely(folder, targetName, value) {
   const tempName = targetName + '.new.' + Utilities.getUuid();
-  // Capture the old-file iterator before the new file receives the target
-  // name, so the new copy can never be included in the retirement loop.
+  // Materialise the old file IDs before creating/renaming the replacement.
+  // Drive iterators can be live, so retaining the iterator itself is unsafe:
+  // it may later include the newly renamed file and trash the replacement.
   const oldFiles = folder.getFilesByName(targetName);
+  const oldFileIds = [];
+  while (oldFiles.hasNext()) oldFileIds.push(oldFiles.next().getId());
   const temp = folder.createFile(tempName, JSON.stringify(value, null, 2), MimeType.PLAIN_TEXT);
   temp.setName(targetName);
-  while (oldFiles.hasNext()) oldFiles.next().setTrashed(true);
+  oldFileIds.forEach(function(fileId) {
+    if (fileId !== temp.getId()) DriveApp.getFileById(fileId).setTrashed(true);
+  });
   return temp;
 }
 
