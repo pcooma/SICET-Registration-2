@@ -38,6 +38,7 @@ const defaultSettings = {
     refund_deadline: 'August 23, 2026',
     usd_to_lkr: 320,
     apc_collection_active: false,
+    preconf_workshops_hidden: false,
     award_categories: ['Innovation', 'Sustainability', 'Leadership'],
     award_purposes: ['Networking', 'To Receive Award', 'Other'],
     excursion_mobility_options: ['None', 'Wheelchair Access Needed', 'Limited Walking preferred'],
@@ -152,7 +153,7 @@ function setupEventListeners() {
                 const mainOn    = document.getElementById('toggleMain').checked;
                 const preconfOn = document.getElementById('togglePreConf').checked;
                 const hasSessions = (appSettings.pre_conference_sessions || []).length > 0;
-                if ((mainOn || preconfOn) && hasSessions) sharedSess.classList.remove('hidden');
+                if ((mainOn || preconfOn) && hasSessions && !appSettings.preconf_workshops_hidden) sharedSess.classList.remove('hidden');
                 else sharedSess.classList.add('hidden');
                 // Workshop discount section: shown only when a checked workshop actually offers a discount
                 _updateWorkshopDiscountVisibility();
@@ -2754,6 +2755,10 @@ function populateSettingsForm() {
     const apcActiveEl = document.getElementById('setting_apc_active');
     if (apcActiveEl) apcActiveEl.checked = appSettings.apc_collection_active || false;
 
+    // Pre-Conference Workshops hidden
+    const preconfHiddenEl = document.getElementById('setting_preconf_hidden');
+    if (preconfHiddenEl) preconfHiddenEl.checked = appSettings.preconf_workshops_hidden || false;
+
     // Journals
     renderJournalsAdmin();
     // Categories & Sessions
@@ -2820,6 +2825,10 @@ async function saveSettings(e) {
     appSettings.inauguration_fee_usd = Number(document.getElementById('fee_inauguration_usd').value) || 0;
     const apcActiveEl = document.getElementById('setting_apc_active');
     appSettings.apc_collection_active = apcActiveEl ? apcActiveEl.checked : false;
+
+    const preconfHiddenEl = document.getElementById('setting_preconf_hidden');
+    appSettings.preconf_workshops_hidden = preconfHiddenEl ? preconfHiddenEl.checked : false;
+
     appSettings.excursion_fees.local = Number(document.getElementById('fee_excursion_local').value);
     appSettings.excursion_fees.foreigner = Number(document.getElementById('fee_excursion_foreigner').value);
 
@@ -3329,11 +3338,43 @@ function saveCategoriesFromAdmin() {
 }
 
 function rebuildCategoryDropdown() {
+    applyPreconfVisibility();
+}
+
+function applyPreconfVisibility() {
+    const hidden = appSettings.preconf_workshops_hidden || false;
+    const togglePreConf = document.getElementById('togglePreConf');
+    if (togglePreConf) {
+        const container = togglePreConf.closest('.form-checkbox');
+        if (container) {
+            if (hidden) {
+                container.classList.add('hidden');
+                togglePreConf.checked = false;
+                normalizeSectionToggleState(togglePreConf);
+            } else {
+                container.classList.remove('hidden');
+            }
+        }
+    }
+    const sharedSess = document.getElementById('section-preconf-sessions');
+    if (sharedSess) {
+        if (hidden) {
+            sharedSess.classList.add('hidden');
+        } else {
+            const mainOn    = document.getElementById('toggleMain')?.checked;
+            const preconfOn = togglePreConf?.checked;
+            const hasSessions = (appSettings.pre_conference_sessions || []).length > 0;
+            if ((mainOn || preconfOn) && hasSessions) sharedSess.classList.remove('hidden');
+            else sharedSess.classList.add('hidden');
+        }
+    }
+
     const sel = document.getElementById('attendeeCategory');
     if (!sel) return;
     const cur = sel.value;
     sel.innerHTML = '<option value="" disabled selected>Select Category</option>';
     (appSettings.categories || []).forEach(cat => {
+        if (hidden && cat.is_workshop_only) return;
         const opt = document.createElement('option');
         opt.value = cat.label;
         opt.textContent = cat.label;
