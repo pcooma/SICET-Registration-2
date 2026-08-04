@@ -3672,7 +3672,7 @@ async function resolveSettings() {
     if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
         try {
             const controller = new AbortController();
-            const tid = setTimeout(() => controller.abort(), 8000);
+            const tid = setTimeout(() => controller.abort(), 15000);
             const resp = await fetch(APPS_SCRIPT_URL + '?action=getSettings', {
                 cache: 'no-store',
                 signal: controller.signal
