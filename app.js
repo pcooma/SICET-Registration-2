@@ -328,10 +328,14 @@ function setupEventListeners() {
     document.getElementById('paymentProof').addEventListener('change', (e) => {
         const incoming = Array.from(e.target.files);
         e.target.value = ''; // reset so same file can be re-selected after removal
-        if (incoming.length) paymentProofPreviouslyUploaded = false;
+        let acceptedAny = false;
         for (const file of incoming) {
             if (file.size > 5 * 1024 * 1024) {
                 showToast(`"${file.name}" exceeds 5MB — skipped.`, 'error');
+                continue;
+            }
+            if (!resolveUploadMime(file)) {
+                showToast(`"${file.name}" is not a supported PDF, JPEG, PNG, or WebP file — skipped.`, 'error');
                 continue;
             }
             if (paymentProofFiles.length >= 3) {
@@ -339,8 +343,12 @@ function setupEventListeners() {
                 break;
             }
             const dup = paymentProofFiles.some(f => f.name === file.name && f.size === file.size);
-            if (!dup) paymentProofFiles.push(file);
+            if (!dup) {
+                paymentProofFiles.push(file);
+                acceptedAny = true;
+            }
         }
+        if (acceptedAny) paymentProofPreviouslyUploaded = false;
         updatePaymentProofUI();
     });
 
@@ -1524,45 +1532,56 @@ async function handleFormSubmit(e) {
         showToast('Please complete Step 1 first to get a Reference ID.', 'error'); return;
     }
 
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Preparing files…</span><i class="bx bx-loader bx-spin"></i>';
+
     const dataObj = collectFormData(refId);
     dataObj['Status'] = 'Submitted';
 
     const studentIdInput = document.getElementById('studentId');
-    if (studentIdInput?.files[0]) {
-        dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
-    } else if (studentIdPreviouslyUploaded) {
-        dataObj['Student_ID_Base64'] = '(uploaded — see folder)';
-    }
-
-    // Workshop discount ID validation
     const workshopTier = document.getElementById('workshopDiscountTier')?.value || 'regular';
     const isPreConfActive = document.getElementById('togglePreConf')?.checked || false;
     const workshopIdInput = document.getElementById('workshopId');
-    if (isPreConfActive && (workshopTier === 'academic' || workshopTier === 'student')) {
-        // Student tier: existing conference Student ID counts as proof — no re-upload needed
-        const studentIdAlreadyHave = !!studentIdInput?.files[0] || studentIdPreviouslyUploaded;
-        const workshopIdHave = !!workshopIdInput?.files[0] || workshopIdPreviouslyUploaded;
-        if (workshopTier === 'student' && studentIdAlreadyHave) {
-            // reuse conference student ID — no extra upload required
-        } else if (!workshopIdHave) {
-            showToast(workshopTier === 'academic'
-                ? 'Please upload your Academic ID to claim the academic discount.'
-                : 'Please upload your Student ID to claim the student discount.', 'error');
-            workshopIdInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span>Submit Registration</span><i class="bx bx-right-arrow-alt"></i>';
-            return;
+    try {
+        if (studentIdInput?.files[0]) {
+            dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+        } else if (studentIdPreviouslyUploaded) {
+            dataObj['Student_ID_Base64'] = '(uploaded — see folder)';
         }
-    }
-    if (workshopIdInput?.files[0]) {
-        dataObj['Workshop_ID_Base64'] = await fileToBase64(workshopIdInput.files[0]);
-    } else if (workshopIdPreviouslyUploaded) {
-        dataObj['Workshop_ID_Base64'] = '(uploaded — see folder)';
-    }
 
-    dataObj['Payment_Proof_Base64'] = paymentProofFiles.length
-        ? await Promise.all(paymentProofFiles.map(f => fileToBase64(f)))
-        : (paymentProofPreviouslyUploaded ? '(uploaded — see folder)' : []);
+        // Workshop discount ID validation
+        if (isPreConfActive && (workshopTier === 'academic' || workshopTier === 'student')) {
+            // Student tier: existing conference Student ID counts as proof — no re-upload needed
+            const studentIdAlreadyHave = !!studentIdInput?.files[0] || studentIdPreviouslyUploaded;
+            const workshopIdHave = !!workshopIdInput?.files[0] || workshopIdPreviouslyUploaded;
+            if (workshopTier === 'student' && studentIdAlreadyHave) {
+                // reuse conference student ID — no extra upload required
+            } else if (!workshopIdHave) {
+                showToast(workshopTier === 'academic'
+                    ? 'Please upload your Academic ID to claim the academic discount.'
+                    : 'Please upload your Student ID to claim the student discount.', 'error');
+                workshopIdInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>Submit Registration</span><i class="bx bx-right-arrow-alt"></i>';
+                return;
+            }
+        }
+        if (workshopIdInput?.files[0]) {
+            dataObj['Workshop_ID_Base64'] = await fileToBase64(workshopIdInput.files[0]);
+        } else if (workshopIdPreviouslyUploaded) {
+            dataObj['Workshop_ID_Base64'] = '(uploaded — see folder)';
+        }
+
+        dataObj['Payment_Proof_Base64'] = paymentProofFiles.length
+            ? await Promise.all(paymentProofFiles.map(f => fileToBase64(f)))
+            : (paymentProofPreviouslyUploaded ? '(uploaded — see folder)' : []);
+    } catch (err) {
+        console.error('File preparation error:', err);
+        showToast(err.message || 'The selected file could not be read. Please choose it again and retry.', 'error');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Submit Registration</span><i class="bx bx-right-arrow-alt"></i>';
+        return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span>Submitting…</span><i class="bx bx-loader bx-spin"></i>';
@@ -2975,16 +2994,37 @@ document.head.appendChild(style);
 // ---- GOOGLE DRIVE HELPERS ----
 
 async function fileToBase64(file) {
-    if (!file || file.size === 0) return null;
-    return new Promise((resolve) => {
+    if (!file || file.size === 0) throw new Error('The selected file is empty. Please choose a valid file.');
+    const mimeType = resolveUploadMime(file);
+    if (!mimeType) throw new Error(`"${file.name}" is not a supported PDF, JPEG, PNG, or WebP file.`);
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (ev) => resolve({
-            name: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            data: ev.target.result.split(',')[1]
-        });
+        reader.onload = (ev) => {
+            const encoded = String(ev.target?.result || '').split(',')[1];
+            if (!encoded) {
+                reject(new Error(`"${file.name}" could not be read. Please choose it again.`));
+                return;
+            }
+            resolve({ name: file.name, mimeType, data: encoded });
+        };
+        reader.onerror = () => reject(new Error(`"${file.name}" could not be read by this browser. Please choose it again.`));
+        reader.onabort = () => reject(new Error(`Reading "${file.name}" was interrupted. Please retry.`));
         reader.readAsDataURL(file);
     });
+}
+
+function resolveUploadMime(file) {
+    const declared = String(file?.type || '').toLowerCase();
+    const extension = String(file?.name || '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+    const byExtension = {
+        pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        png: 'image/png', webp: 'image/webp'
+    };
+    const allowedDeclared = {
+        'application/pdf': 'application/pdf', 'image/jpeg': 'image/jpeg',
+        'image/jpg': 'image/jpeg', 'image/png': 'image/png', 'image/webp': 'image/webp'
+    };
+    return allowedDeclared[declared] || byExtension[extension] || '';
 }
 
 // Show a "previously uploaded" note next to a file input when loading saved data
@@ -3089,22 +3129,37 @@ async function submitToGoogleDrive(dataObj) {
         showToast('Google Drive not configured. Ask the admin to deploy the Apps Script first.', 'error');
         return false;
     }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
     try {
         const response = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(dataObj)
+            body: JSON.stringify(dataObj),
+            signal: controller.signal
         });
-        const result = await response.json();
+        if (!response.ok) throw new Error(`Upload server returned HTTP ${response.status}.`);
+        const responseText = await response.text();
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (_) {
+            throw new Error('Upload server returned an unreadable response. Please retry once.');
+        }
         if (!result.success) {
             showToast(result.error || 'The server rejected the registration.', 'error');
             return false;
         }
         return true;
     } catch (err) {
-        showToast('Network error — please check your connection and try again.', 'error');
+        const message = err.name === 'AbortError'
+            ? 'Upload timed out. Your selected slip is still available — please check your connection and retry.'
+            : (err.message || 'Network error — please check your connection and try again.');
+        showToast(message, 'error');
         console.error('Drive submission error:', err);
         return false;
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 

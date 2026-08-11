@@ -244,11 +244,11 @@ function handleSubmitRegistration(data) {
 
   // Save uploaded files
   if (data.Student_ID_Base64 && data.Student_ID_Base64.data) {
-    saveFileToFolder(userFolder, 'student_id_', data.Student_ID_Base64);
+    replaceUploadedFilesSafely(userFolder, 'student_id_', [data.Student_ID_Base64], function() { return 'student_id_'; });
     data.Student_ID_Base64 = '(uploaded — see folder)';
   }
   if (data.Workshop_ID_Base64 && data.Workshop_ID_Base64.data) {
-    saveFileToFolder(userFolder, 'workshop_id_', data.Workshop_ID_Base64);
+    replaceUploadedFilesSafely(userFolder, 'workshop_id_', [data.Workshop_ID_Base64], function() { return 'workshop_id_'; });
     data.Workshop_ID_Base64 = '(uploaded — see folder)';
   }
   if (data.Payment_Proof_Base64) {
@@ -256,10 +256,11 @@ function handleSubmitRegistration(data) {
       ? data.Payment_Proof_Base64
       : [data.Payment_Proof_Base64];
     const validProofs = proofs.filter(p => p && p.data);
-    validProofs.forEach((proof, i) => {
-      const prefix = validProofs.length > 1 ? 'payment_proof_' + (i + 1) + '_' : 'payment_proof_';
-      saveFileToFolder(userFolder, prefix, proof);
-    });
+    if (validProofs.length > 0) {
+      replaceUploadedFilesSafely(userFolder, 'payment_proof_', validProofs, function(index, total) {
+        return total > 1 ? 'payment_proof_' + (index + 1) + '_' : 'payment_proof_';
+      });
+    }
     if (validProofs.length > 0) data.Payment_Proof_Base64 = '(uploaded — see folder)';
   }
 
@@ -447,9 +448,29 @@ function findFolderByRef(mainFolder, refId) {
 
 function validateUpload(fileObj, label, errors) {
   if (!fileObj || !fileObj.data) return;
-  const estimatedBytes = Math.floor(String(fileObj.data).length * 0.75);
+  const encoded = String(fileObj.data).replace(/\s/g, '');
+  const padding = encoded.endsWith('==') ? 2 : (encoded.endsWith('=') ? 1 : 0);
+  const estimatedBytes = Math.floor(encoded.length * 0.75) - padding;
   if (estimatedBytes > MAX_UPLOAD_BYTES) errors.push(label + ' exceeds 5 MB.');
-  if (ALLOWED_UPLOAD_MIME.indexOf(String(fileObj.mimeType || '').toLowerCase()) < 0) errors.push(label + ' has an unsupported file type.');
+  const detectedMime = detectUploadMime(fileObj);
+  if (!detectedMime || ALLOWED_UPLOAD_MIME.indexOf(detectedMime) < 0) {
+    errors.push(label + ' is not a valid PDF, JPEG, PNG, or WebP file.');
+  } else {
+    // Canonicalise empty/generic MIME values reported by some mobile browsers
+    // and WhatsApp-downloaded files. The signature, not the filename, wins.
+    fileObj.mimeType = detectedMime;
+  }
+}
+
+function detectUploadMime(fileObj) {
+  try {
+    const bytes = Utilities.base64Decode(String(fileObj.data || '').replace(/\s/g, ''));
+    if (bytes.length >= 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2D) return 'application/pdf';
+    if (bytes.length >= 3 && (bytes[0] & 0xFF) === 0xFF && (bytes[1] & 0xFF) === 0xD8 && (bytes[2] & 0xFF) === 0xFF) return 'image/jpeg';
+    if (bytes.length >= 8 && (bytes[0] & 0xFF) === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) return 'image/png';
+    if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  } catch (_) {}
+  return '';
 }
 
 function validateRegistration(input, mainFolder) {
@@ -735,7 +756,29 @@ function saveFileToFolder(folder, prefix, fileObj) {
     fileObj.mimeType || 'application/octet-stream',
     prefix + (fileObj.name || 'file')
   );
-  folder.createFile(blob);
+  return folder.createFile(blob);
+}
+
+function replaceUploadedFilesSafely(folder, existingPrefix, uploads, prefixForIndex) {
+  const existingFiles = folder.getFiles();
+  const oldFileIds = [];
+  while (existingFiles.hasNext()) {
+    const existingFile = existingFiles.next();
+    if (existingFile.getName().indexOf(existingPrefix) === 0) oldFileIds.push(existingFile.getId());
+  }
+
+  const createdFiles = [];
+  try {
+    uploads.forEach(function(upload, index) {
+      createdFiles.push(saveFileToFolder(folder, prefixForIndex(index, uploads.length), upload));
+    });
+  } catch (err) {
+    createdFiles.forEach(function(file) { file.setTrashed(true); });
+    throw err;
+  }
+
+  oldFileIds.forEach(function(fileId) { DriveApp.getFileById(fileId).setTrashed(true); });
+  return createdFiles;
 }
 
 function deleteFilesByName(folder, name) {

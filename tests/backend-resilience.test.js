@@ -8,7 +8,10 @@ const sandbox = {
   Logger: { log() {} },
   SpreadsheetApp: { flush() {} },
   MimeType: { PLAIN_TEXT: 'text/plain' },
-  Utilities: { getUuid: () => 'test-version' },
+  Utilities: {
+    getUuid: () => 'test-version',
+    base64Decode: value => Array.from(Buffer.from(value, 'base64'))
+  },
   DriveApp: {
     getFileById(id) {
       return replacementFiles.find(file => file.id === id);
@@ -192,5 +195,24 @@ const validAwardRegistration = sandbox.validateRegistration(Object.assign({}, ba
   Participant_Count: '2'
 }), emptyFolder);
 assert.equal(validAwardRegistration.valid, true, 'positive whole-number award participant count must be accepted');
+
+const genericMimePdf = {
+  name: 'bank-slip.pdf',
+  mimeType: 'application/octet-stream',
+  data: Buffer.from('%PDF-1.4\nprobe').toString('base64')
+};
+const genericMimeErrors = [];
+sandbox.validateUpload(genericMimePdf, 'Payment proof 1', genericMimeErrors);
+assert.deepEqual(genericMimeErrors, [], 'valid PDF signature must survive a generic mobile-browser MIME type');
+assert.equal(genericMimePdf.mimeType, 'application/pdf', 'backend must canonicalize a valid PDF MIME type');
+
+const spoofedPdfErrors = [];
+sandbox.validateUpload({
+  name: 'bank-slip.pdf',
+  mimeType: 'application/pdf',
+  data: Buffer.from('not really a PDF').toString('base64')
+}, 'Payment proof 1', spoofedPdfErrors);
+assert.ok(spoofedPdfErrors.includes('Payment proof 1 is not a valid PDF, JPEG, PNG, or WebP file.'),
+  'backend must reject extension/MIME spoofing when the file signature is invalid');
 
 console.log('backend resilience tests passed');
