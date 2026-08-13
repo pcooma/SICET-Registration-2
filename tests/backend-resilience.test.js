@@ -64,6 +64,8 @@ const mockSheet = {
 const migration = sandbox.ensureMasterSheetSchema(mockSheet);
 assert.deepEqual(originalHeaders, ['Submission_Date', 'Invoice_ID', 'Full_Name'], 'existing columns must remain untouched');
 assert.ok(appended.includes('Settings_Version'), 'new audit columns must be appended');
+assert.ok(appended.includes('Conference_Workshops'), 'conference workshop names must use an append-only column');
+assert.ok(appended.includes('Conference_Workshop_IDs'), 'conference workshop IDs must use an append-only column');
 assert.equal(migration.finalColumnCount, originalHeaders.length + appended.length);
 
 const historicalSnapshot = JSON.stringify({ category: validSettings.categories[0], settings_version: 'v1' });
@@ -147,6 +149,33 @@ assert.equal(normalizedInactiveSections.Excursion_Local_Count, '0', 'inactive ex
 assert.equal(normalizedInactiveSections.Mobility_Requirements, '', 'inactive excursion must discard preferences');
 assert.equal(normalizedInactiveSections.PreConf_Session_IDs, 'pcs1', 'active workshop selections must be preserved');
 assert.equal(normalizedInactiveSections.Workshop_Discount_Tier, 'student', 'active workshop tier must be preserved');
+
+const expiredErrors = [];
+sandbox.validateEventSelections('expired', [
+  { id: 'active', name: 'Active', event_date: '2026-08-20', active: true },
+  { id: 'expired', name: 'Expired', event_date: '2026-08-01', active: true }
+], '', '2026-08-13', 'workshop', expiredErrors);
+assert.equal(expiredErrors.length, 1, 'new registrations must reject expired workshop IDs');
+const historicalExpiredErrors = [];
+sandbox.validateEventSelections('expired', [], 'expired', '2026-08-13', 'workshop', historicalExpiredErrors);
+assert.equal(historicalExpiredErrors.length, 0, 'returning records may preserve their historical workshop selection');
+const disabledErrors = [];
+sandbox.validateEventSelections('disabled', [{ id: 'disabled', active: false }], '', '2026-08-13', 'workshop', disabledErrors);
+assert.equal(disabledErrors.length, 1, 'new registrations must reject disabled workshop IDs');
+
+const serverPrice = sandbox.calculateAuthoritativeFee({
+  Registration_Type: 'Main + Award', Attendee_Region: 'Local', Number_of_Papers: '2', Participant_Count: '1'
+}, {
+  usd_to_lkr: 320, discounts: { student_from_2nd: 10, discount_max_papers: 3 }, journals: [],
+  award_fee: 10000, excursion_fees: { local: 15000, foreigner: 50 }
+}, { fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, paper_discount: true }, []);
+assert.equal(serverPrice.total, 38500, 'backend must independently calculate paid totals instead of trusting the browser');
+assert.equal(serverPrice.currency, 'LKR');
+const tamperedFreeClaim = sandbox.calculateAuthoritativeFee({
+  Registration_Type: 'Main', Attendee_Region: 'SAARC', Number_of_Papers: '1', Calculated_Total_Fee: '0'
+}, { usd_to_lkr: 320, discounts: {}, journals: [], excursion_fees: {} },
+{ fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250 }, []);
+assert.equal(tamperedFreeClaim.total, 150, 'a client-supplied zero must not bypass payment requirements');
 
 const emptyFolder = {
   getFolders() {

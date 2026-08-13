@@ -125,6 +125,12 @@ Steps 1–6 are unchanged. Step 7 generates a confirmation/reference. Payment fi
 - High: historical registrations had no immutable pricing/settings version, so later configuration changes could make an old invoice impossible to explain.
 - High: master-sheet schema repair depended on a one-time manual migration; submissions now append missing columns automatically and never remove/reorder existing columns.
 - Medium: a public settings read attempted an authenticated settings write when defaults gained a new field, producing misleading Drive/authentication errors.
+- Critical: the backend trusted `Calculated_Total_Fee`; a modified payload could claim zero and bypass the payment-proof state. Apps Script now recalculates the authoritative total and currency before assigning status.
+- High: Step 1 downloaded an invoice and announced a usable reference before confirming that the registration JSON/row was saved. Invoice download and Step 2 now wait for backend success.
+- High: returning/draft flows did not restore conference-day workshop participation, and conference-workshop-only registration could not reach invoice/reference generation.
+- High: backend workshop validation accepted expired, disabled, or invented IDs. New selections must now be active and non-expired; saved historical selections remain preservable.
+- Medium: a temporary settings API error switched visitors to built-in default fees instead of the last confirmed cached settings.
+- Medium: malformed local browser JSON could stop form initialization, and uploaded filenames/record values had unsafe HTML rendering paths.
 
 ### Safe settings and schema evolution
 
@@ -140,7 +146,7 @@ Steps 1–6 are unchanged. Step 7 generates a confirmation/reference. Payment fi
 ### Operational gaps requiring an owner/process decision
 
 - Payment workflow has no finance decision states. Add Pending Review, Payment Confirmed, Payment Rejected, Waived, Refunded, and Cancelled, with reviewer, timestamp, notes, and an audit log.
-- The backend still stores a browser-calculated quoted amount. Before accepting real money at scale, implement a single server-side fee engine and store quoted, verified, paid, balance, and currency separately.
+- The backend now recalculates the registration amount and currency from authoritative settings before persistence. A later finance workflow should still store verified paid amount, balance, waiver/refund values, reviewer, and timestamps separately from the registration charge.
 - Reference plus email is stronger than reference-only but is not strong authentication. For higher assurance, email a short-lived one-time link/code.
 - There is no capacity control for workshops, awards, excursion seats, or inauguration catering. Add capacity, reservation, confirmed count, waitlist, and close date per product.
 - There is no notification service. Add registration received, payment approved/rejected, change confirmation, cancellation, and event reminder emails.
@@ -169,3 +175,30 @@ Steps 1–6 are unchanged. Step 7 generates a confirmation/reference. Payment fi
 - A settings change is authoritative only after authenticated Drive persistence succeeds.
 - Every reference maps to one logical registration folder and one master-sheet row.
 - Operational counts distinguish submitted, payment-confirmed, cancelled, refunded, and waitlisted records once status workflow is implemented.
+
+## 8. What-if reliability matrix
+
+| What if… | Protection / expected recovery |
+|---|---|
+| A required field is missing on mobile? | Custom validation identifies the first visible invalid field, explains it, scrolls, and focuses it instead of allowing a silent native-validation block. |
+| The participant clicks Step 1 twice? | The same displayed/local reference is reused; the backend lock serializes writes and the Sheet is upserted by reference. |
+| Two participants act at the same time? | Apps Script uses a script lock around write actions; a request that cannot obtain it returns a retryable busy response. |
+| The browser total is changed to zero? | Apps Script recalculates total/currency from authoritative Drive settings and assigns payment status from that amount. |
+| Network fails during Step 1? | No invoice/reference success is announced and no download occurs; the form/draft remains available for retry. |
+| Network fails during final upload? | A 120-second timeout returns a clear retry message and selected proof files remain in memory. |
+| A mobile browser provides an empty MIME type? | Client infers supported types by extension; backend verifies PDF/JPEG/PNG/WebP signatures and canonicalizes the MIME type. |
+| A file is empty, oversized, corrupt, spoofed, duplicated, or the fourth proof? | Client rejects common cases early; backend enforces signature and 5 MB per file; UI caps proofs at three and avoids duplicate name/size selections. |
+| Replacement upload fails halfway? | New files are created first; partial new files are trashed on error; old good files are retired only after all replacements succeed. |
+| Settings API is temporarily unavailable? | Last confirmed cached settings are retained with a visible warning; a backend error no longer overwrites them with defaults. |
+| Cached JSON is malformed? | The corrupt entry is removed and initialization continues using a safe fallback. |
+| A settings write is interrupted? | An immutable history copy is created first; canonical JSON replacement is create-before-retire; settings reads can recover the newest history version. |
+| A workshop date passes? | Participant UI filters against the Asia/Colombo calendar date; backend rejects new expired/disabled selections even if a payload is manually altered. |
+| A returning registration contains an expired or retired workshop/category? | Historical stable IDs and pricing snapshot remain preservable; unavailable options are not offered to new participants. |
+| Frontend is updated but Apps Script is not redeployed? | Returning lookup detects the old health-check response; deployment checklist requires frontend/backend release together. New conference workshop persistence still requires the updated backend. |
+| The schema migration was not run? | Every submission calls append-only schema repair before upsert; the manual migration remains recommended for pre-deployment verification. |
+| A participant changes their surname? | Folder lookup uses reference ID, so the existing folder is reused rather than creating a second folder. |
+| A different email tries to reuse a reference? | Backend compares normalized saved and submitted email and rejects the update. |
+| Admin token expires? | Protected requests return Unauthorized; the browser removes the stale token and asks for sign-in again. |
+| User-supplied text contains HTML/script markup? | Record table/detail and upload filenames are escaped before HTML rendering; stored content is displayed as text. |
+
+Residual operational risks remain: finance approval states/audit log, capacity/waitlists, OTP-strength returning-user authentication, role-based admin access, notification delivery, retention policy, and scheduled Drive/Sheet reconciliation still require business decisions and are not silently represented as complete.

@@ -485,12 +485,31 @@ function validateRegistration(input, mainFolder) {
   if (['Local','SAARC','Non-SAARC'].indexOf(data.Attendee_Region) < 0) errors.push('Invalid attendee region.');
   if (!isValidRef(data.Invoice_ID)) errors.push('Invalid reference ID.');
   const registrationTypes = String(data.Registration_Type || '');
+  let settings = null;
+  let todayColombo = '';
+  const hasPreConferenceSelection = registrationTypes.indexOf('Pre-Conference Workshops') >= 0 && String(data.PreConf_Session_IDs || '').trim();
+  const hasConferenceSelection = registrationTypes.indexOf('Conference Workshops') >= 0 && String(data.Conference_Workshop_IDs || '').trim();
+  if (hasPreConferenceSelection || hasConferenceSelection) {
+    settings = readCurrentSettings(mainFolder);
+    todayColombo = Utilities.formatDate(new Date(), 'Asia/Colombo', 'yyyy-MM-dd');
+  }
+  const existing = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
+  let saved = null;
+  if (existing) {
+    try { saved = getRegistrationByRef(data.Invoice_ID); } catch (_) {}
+  }
   if (registrationTypes.indexOf('Pre-Conference Workshops') >= 0 &&
       !String(data.PreConf_Session_IDs || data.PreConf_Sessions || '').trim()) {
     errors.push('Select at least one pre-conference workshop.');
   }
+  if (hasPreConferenceSelection) {
+    validateEventSelections(data.PreConf_Session_IDs, settings.pre_conference_sessions || [], saved && saved.PreConf_Session_IDs, todayColombo, 'pre-conference workshop', errors);
+  }
   if (registrationTypes.indexOf('Conference Workshops') >= 0 && !String(data.Conference_Workshop_IDs || '').trim()) {
     errors.push('Select at least one technical workshop during the conference.');
+  }
+  if (hasConferenceSelection) {
+    validateEventSelections(data.Conference_Workshop_IDs, settings.conference_workshops || [], saved && saved.Conference_Workshop_IDs, todayColombo, 'conference workshop', errors);
   }
   if (registrationTypes.indexOf('Excursion') >= 0) {
     const excursionCount = data.Attendee_Region === 'Local'
@@ -506,10 +525,9 @@ function validateRegistration(input, mainFolder) {
       errors.push('Excellence Award registration requires at least one participant.');
     }
   }
-  const existing = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
   if (existing) {
     try {
-      const saved = getRegistrationByRef(data.Invoice_ID);
+      if (!saved) saved = getRegistrationByRef(data.Invoice_ID);
       if (normaliseEmail(saved.Email) !== normaliseEmail(data.Email)) errors.push('Reference ID and email do not match.');
     } catch (_) { errors.push('Existing registration could not be verified.'); }
   }
@@ -517,11 +535,18 @@ function validateRegistration(input, mainFolder) {
   validateUpload(data.Workshop_ID_Base64, 'Workshop ID', errors);
   const proofs = Array.isArray(data.Payment_Proof_Base64) ? data.Payment_Proof_Base64 : [data.Payment_Proof_Base64];
   proofs.forEach(function(p, i) { validateUpload(p, 'Payment proof ' + (i + 1), errors); });
-  const quotedTotal = Number(String(data.Calculated_Total_Fee || '0').replace(/,/g, ''));
-  const hasPaymentProof = proofs.some(function(p) { return p && p.data; }) || data.Payment_Proof_Base64 === '(uploaded — see folder)';
-  data.Status = quotedTotal > 0 ? (hasPaymentProof ? 'Payment Proof Submitted' : 'Pending Payment') : 'Submitted';
   data.Submission_Date = new Date().toISOString();
   return { valid: errors.length === 0, errors: errors, data: data };
+}
+
+function validateEventSelections(requestedValue, configuredItems, savedValue, today, label, errors) {
+  const requested = String(requestedValue || '').split(',').map(function(value) { return value.trim(); }).filter(Boolean);
+  const savedIds = String(savedValue || '').split(',').map(function(value) { return value.trim(); }).filter(Boolean);
+  requested.forEach(function(id) {
+    const item = configuredItems.find(function(candidate) { return candidate.id === id; });
+    const currentlyAvailable = item && item.active !== false && (!item.event_date || item.event_date >= today);
+    if (!currentlyAvailable && savedIds.indexOf(id) < 0) errors.push('Selected ' + label + ' is unavailable or expired. Refresh and choose an active option.');
+  });
 }
 
 function readCurrentSettings(mainFolder) {
@@ -595,11 +620,29 @@ function attachPricingSnapshot(data, mainFolder) {
   const selectedSessions = (settings.pre_conference_sessions || []).filter(function(session) {
     return requestedSessionIds.indexOf(session.id) >= 0 || requestedSessionNames.indexOf(session.name) >= 0;
   });
+  const requestedConferenceIds = String(data.Conference_Workshop_IDs || '').split(',').map(function(id) { return id.trim(); }).filter(Boolean);
+  const selectedConferenceWorkshops = (settings.conference_workshops || []).filter(function(workshop) {
+    return requestedConferenceIds.indexOf(workshop.id) >= 0;
+  });
 
   data.Record_Schema_Version = RECORD_SCHEMA_VERSION;
   data.Settings_Version = settings._meta && settings._meta.version || 'legacy-unversioned';
   data.Attendee_Category_ID = category.id;
   data.PreConf_Session_IDs = selectedSessions.map(function(session) { return session.id; }).join(', ');
+  data.PreConf_Sessions = selectedSessions.map(function(session) { return session.name; }).join(', ');
+  const savedRecord = existingFolder ? getRegistrationByRef(data.Invoice_ID) : null;
+  data.Conference_Workshop_IDs = selectedConferenceWorkshops.length
+    ? selectedConferenceWorkshops.map(function(workshop) { return workshop.id; }).join(', ')
+    : (savedRecord && savedRecord.Conference_Workshop_IDs || '');
+  data.Conference_Workshops = selectedConferenceWorkshops.length
+    ? selectedConferenceWorkshops.map(function(workshop) { return workshop.name; }).join(', ')
+    : (savedRecord && savedRecord.Conference_Workshops || '');
+  const authoritative = calculateAuthoritativeFee(data, settings, category, selectedSessions);
+  data.Calculated_Total_Fee = authoritative.total.toFixed(2);
+  data.Currency = authoritative.currency;
+  const paymentProofs = Array.isArray(data.Payment_Proof_Base64) ? data.Payment_Proof_Base64 : [data.Payment_Proof_Base64];
+  const hasPaymentProof = paymentProofs.some(function(proof) { return proof && proof.data; }) || data.Payment_Proof_Base64 === '(uploaded — see folder)';
+  data.Status = authoritative.total > 0 ? (hasPaymentProof ? 'Payment Proof Submitted' : 'Pending Payment') : 'Submitted';
   data.Pricing_Snapshot = JSON.stringify({
     settings_version: data.Settings_Version,
     captured_at: new Date().toISOString(),
@@ -610,10 +653,60 @@ function attachPricingSnapshot(data, mainFolder) {
     inauguration_fee_usd: settings.inauguration_fee_usd || 0,
     excursion_fees: settings.excursion_fees || {},
     selected_workshops: selectedSessions,
+    selected_conference_workshops: selectedConferenceWorkshops,
     journals: settings.journals || [],
     usd_to_lkr: settings.usd_to_lkr || 0
   });
   return normalizeConditionalRegistration(data, category);
+}
+
+function calculateAuthoritativeFee(data, settings, category, selectedSessions) {
+  const registrationTypes = String(data.Registration_Type || '');
+  const isLocal = data.Attendee_Region === 'Local';
+  const currency = isLocal ? 'LKR' : 'USD';
+  const fx = Number(settings.usd_to_lkr || 0);
+  function convert(amount, sourceCurrency) {
+    if (sourceCurrency === currency) return amount;
+    return currency === 'LKR' ? Math.round(amount * fx) : Number((amount / fx).toFixed(2));
+  }
+  let total = 0;
+  if (registrationTypes.indexOf('Main') >= 0 && !category.is_workshop_only) {
+    const baseFee = Number(isLocal ? category.fee_local : (data.Attendee_Region === 'SAARC' ? category.fee_saarc : category.fee_nonsaarc)) || 0;
+    const paperCount = category.no_papers ? 1 : Math.max(1, Math.min(10, Number(data.Number_of_Papers) || 1));
+    if (category.no_papers || paperCount === 1) total += baseFee;
+    else {
+      const discountPct = category.paper_discount ? Number(settings.discounts && settings.discounts.student_from_2nd || 0) : 0;
+      const maxDiscounted = Number(settings.discounts && settings.discounts.discount_max_papers || 0);
+      const discountedCount = discountPct > 0 ? (maxDiscounted > 0 ? Math.min(paperCount - 1, maxDiscounted) : paperCount - 1) : 0;
+      total += baseFee + discountedCount * baseFee * (1 - discountPct / 100) + (paperCount - 1 - discountedCount) * baseFee;
+    }
+    (settings.journals || []).forEach(function(journal) {
+      for (let i = 1; i <= paperCount; i++) {
+        const include = data['Paper_' + i + '_Include_APC'];
+        if (include && String(data['Paper_' + i + '_Journal'] || '') === journal.name && journal.apc_not_applicable !== true) {
+          total += convert(Number(journal.fee) || 0, 'USD');
+        }
+      }
+    });
+    if (data.Include_Inauguration) total += Number(isLocal ? settings.inauguration_fee : settings.inauguration_fee_usd) || 0;
+  }
+  if (registrationTypes.indexOf('Pre-Conference Workshops') >= 0) {
+    const tier = String(data.Workshop_Discount_Tier || 'regular');
+    selectedSessions.forEach(function(session) {
+      const raw = Number(isLocal ? session.fee_local : (data.Attendee_Region === 'SAARC' ? session.fee_saarc : session.fee_nonsaarc)) || 0;
+      const discount = tier === 'academic' ? Number(session.academic_discount_pct || 0) : (tier === 'student' ? Number(session.student_discount_pct || 0) : 0);
+      total += isLocal ? Math.round(raw * (1 - discount / 100)) : Number((raw * (1 - discount / 100)).toFixed(2));
+    });
+  }
+  if (registrationTypes.indexOf('Award') >= 0) {
+    total += convert((Number(settings.award_fee) || 0) * (Number(data.Participant_Count) || 0), 'LKR');
+  }
+  if (registrationTypes.indexOf('Excursion') >= 0) {
+    total += isLocal
+      ? (Number(settings.excursion_fees && settings.excursion_fees.local) || 0) * (Number(data.Excursion_Local_Count) || 0)
+      : (Number(settings.excursion_fees && settings.excursion_fees.foreigner) || 0) * (Number(data.Excursion_Foreign_Count) || 0);
+  }
+  return { total: Number(total.toFixed(2)), currency: currency };
 }
 
 function normalizeConditionalRegistration(data, category) {

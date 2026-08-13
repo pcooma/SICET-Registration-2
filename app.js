@@ -51,6 +51,10 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCfXzpVmHaW5Po
 const invoiceAuditMode = ['localhost', '127.0.0.1'].includes(window.location.hostname)
     && new URLSearchParams(window.location.search).has('invoiceAudit');
 let adminToken = sessionStorage.getItem('sicet2026_admin_token') || '';
+function readLocalJson(key, fallback = null) {
+    try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; }
+    catch (_) { localStorage.removeItem(key); return fallback; }
+}
 
 
 // DOM Elements - General
@@ -96,7 +100,7 @@ let submissions = []; // Loaded from Google Drive on demand (see loadFromGoogleD
 let adminLoggedIn = false;
 let pendingAdminView = 'settings';
 let appSettings = JSON.parse(JSON.stringify(defaultSettings)); // resolved properly in resolveSettings()
-let formDraft = JSON.parse(localStorage.getItem('sicet2026_draft')) || null;
+let formDraft = readLocalJson('sicet2026_draft');
 let paymentProofFiles = []; // Managed array for multi-file proof of payment upload
 let paymentProofPreviouslyUploaded = false; // true when loaded record already has proof on server
 let studentIdPreviouslyUploaded = false; // true when loaded record already has student ID on server
@@ -461,7 +465,7 @@ function setupEventListeners() {
     document.getElementById('email')?.addEventListener('blur', () => {
         const email = document.getElementById('email').value.trim();
         if (!email) return;
-        const stored = JSON.parse(localStorage.getItem('sicet2026_ref') || 'null');
+        const stored = readLocalJson('sicet2026_ref');
         if (stored && stored.email === email && stored.refId) {
             const refEl = document.getElementById('reg-ref-id');
             if (refEl && (!refEl.textContent || refEl.textContent === '—')) {
@@ -1054,9 +1058,10 @@ function calculateTotalFee() {
     const isAward     = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
     const isPreConf   = document.getElementById('togglePreConf')?.checked || false;
+    const isConferenceWorkshops = document.getElementById('toggleConferenceWorkshops')?.checked || false;
 
     const invWrapper = document.getElementById('invoice-download-wrapper');
-    if (!isMain && !isAward && !isExcursion && !isPreConf) {
+    if (!isMain && !isAward && !isExcursion && !isPreConf && !isConferenceWorkshops) {
         priceBox.classList.add('hidden');
         if (invWrapper) invWrapper.classList.add('hidden');
         priceCurrency.textContent = 'LKR';
@@ -1263,10 +1268,8 @@ function collectFormData(refId) {
     const selectedSessionIds = [];
     document.querySelectorAll('.preconf-session-check:checked').forEach(chk => {
         const sess = (appSettings.pre_conference_sessions || []).find(s => s.id === chk.dataset.sessId);
-        if (sess) {
-            selectedSessionNames.push(sess.name);
-            selectedSessionIds.push(sess.id);
-        }
+        selectedSessionIds.push(chk.dataset.sessId);
+        selectedSessionNames.push(sess?.name || chk.nextElementSibling?.textContent?.replace(/ — saved past selection$/, '') || chk.dataset.sessId);
     });
     dataObj['PreConf_Sessions'] = selectedSessionNames.join(', ');
     dataObj['PreConf_Session_IDs'] = selectedSessionIds.join(', ');
@@ -1275,7 +1278,8 @@ function collectFormData(refId) {
     const conferenceIds = [];
     document.querySelectorAll('.conference-workshop-check:checked').forEach(chk => {
         const item = (appSettings.conference_workshops || []).find(workshop => workshop.id === chk.dataset.workshopId);
-        if (item) { conferenceItems.push(item.name); conferenceIds.push(item.id); }
+        conferenceIds.push(chk.dataset.workshopId);
+        conferenceItems.push(item?.name || chk.nextElementSibling?.textContent?.replace(/ — saved past selection$/, '') || chk.dataset.workshopId);
     });
     dataObj['Conference_Workshops'] = conferenceItems.join(', ');
     dataObj['Conference_Workshop_IDs'] = conferenceIds.join(', ');
@@ -1393,7 +1397,8 @@ function populateFormFromData(data) {
         'Main':           'Registering_Main',
         'Award':          'Registering_Award',
         'Excursion':      'Registering_Excursion',
-        'Pre-Conference': 'Registering_PreConf'
+        'Pre-Conference': 'Registering_PreConf',
+        'Conference Workshops': 'Registering_Conference_Workshops'
     };
     const regType = data.Registration_Type || '';
     Object.entries(typeKeyMap).forEach(([key, name]) => {
@@ -1425,7 +1430,7 @@ function populateFormFromData(data) {
         'Registration_Type', 'Number_of_Papers', 'Calculated_Total_Fee', 'Currency',
         'Submission_Date', 'Invoice_ID', 'Status', 'Drive_Folder_URL',
         'Student_ID_Base64', 'Payment_Proof_Base64', 'Workshop_ID_Base64', 'action',
-        'Registering_Main', 'Registering_Award', 'Registering_Excursion', 'Registering_PreConf'
+        'Registering_Main', 'Registering_Award', 'Registering_Excursion', 'Registering_PreConf', 'Registering_Conference_Workshops'
     ]);
 
     // 3. Populate every field by type — radio → checkbox → text/select
@@ -1474,6 +1479,28 @@ function populateFormFromData(data) {
         const shouldRestore = savedSessionIds.has(checkbox.dataset.sessId) ||
             (session && savedSessionNames.has(session.name));
         if (shouldRestore) checkbox.checked = true;
+    });
+    savedSessionIds.forEach(id => {
+        if (document.querySelector(`.preconf-session-check[data-sess-id="${CSS.escape(id)}"]`)) return;
+        const historical = (appSettings.pre_conference_sessions || []).find(item => item.id === id);
+        const row = document.createElement('div'); row.className = 'form-checkbox mb-2';
+        const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = true; checkbox.className = 'preconf-session-check'; checkbox.dataset.sessId = id; checkbox.name = 'PreConf_' + id;
+        const label = document.createElement('label'); label.textContent = (historical?.name || id) + ' — saved past selection';
+        row.append(checkbox, label); document.getElementById('preconf-sessions-container')?.appendChild(row);
+    });
+    const savedConferenceIds = new Set(String(data.Conference_Workshop_IDs || '').split(',').map(value => value.trim()).filter(Boolean));
+    const savedConferenceNames = new Set(String(data.Conference_Workshops || '').split(',').map(value => value.trim()).filter(Boolean));
+    document.querySelectorAll('.conference-workshop-check').forEach(checkbox => {
+        const workshop = (appSettings.conference_workshops || []).find(item => item.id === checkbox.dataset.workshopId);
+        checkbox.checked = savedConferenceIds.has(checkbox.dataset.workshopId) || (workshop && savedConferenceNames.has(workshop.name));
+    });
+    savedConferenceIds.forEach(id => {
+        if (document.querySelector(`.conference-workshop-check[data-workshop-id="${CSS.escape(id)}"]`)) return;
+        const historical = (appSettings.conference_workshops || []).find(item => item.id === id);
+        const row = document.createElement('div'); row.className = 'form-checkbox mb-2';
+        const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = true; checkbox.className = 'conference-workshop-check'; checkbox.dataset.workshopId = id; checkbox.name = 'Conference_Workshop_' + id;
+        const label = document.createElement('label'); label.textContent = (historical?.name || id) + ' — saved past selection';
+        row.append(checkbox, label); document.getElementById('conference-workshops-container')?.appendChild(row);
     });
 
     // 5. Re-populate paper fields — MUST run after Step 4 because attendeeCategory's change
@@ -1656,7 +1683,7 @@ async function handleFormSubmit(e) {
 
 // ---- PROFORMA INVOICE (jsPDF) LOGIC ----
 
-function generateInvoice() {
+async function generateInvoice() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
@@ -1687,8 +1714,9 @@ function generateInvoice() {
     const isAward    = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
     const isPreConf  = document.getElementById('togglePreConf')?.checked || false;
+    const isConferenceWorkshops = document.getElementById('toggleConferenceWorkshops')?.checked || false;
 
-    if (!isMain && !isAward && !isExcursion && !isPreConf) {
+    if (!isMain && !isAward && !isExcursion && !isPreConf && !isConferenceWorkshops) {
         showToast('Please select registration items to generate an invoice.', 'error');
         return;
     }
@@ -1724,11 +1752,12 @@ function generateInvoice() {
     // Reuse existing ref ID — priority: element already shows one → localStorage for this email → generate new
     let refId = document.getElementById('reg-ref-id')?.textContent?.trim();
     if (!refId || refId === '—') {
-        const storedRef = JSON.parse(localStorage.getItem('sicet2026_ref') || 'null');
+        const storedRef = readLocalJson('sicet2026_ref');
         if (storedRef && storedRef.email === email && storedRef.refId) {
             refId = storedRef.refId;
         } else {
-            refId = 'SICET2026-' + Date.now().toString().slice(-7);
+            const randomPart = globalThis.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 8).toUpperCase() || Math.random().toString(36).slice(2, 10).toUpperCase();
+            refId = 'SICET2026-' + Date.now().toString().slice(-7) + randomPart;
         }
     }
     // Always persist the email→refId mapping so re-visits reuse the same record
@@ -2116,22 +2145,23 @@ function generateInvoice() {
         }
         auditNode.value = JSON.stringify({ pdfFileName, invoiceCur, grandTotal, lineItems });
     }
-    doc.save(pdfFileName);
-
-    // Save registration JSON to Drive so ref ID lookup works (single request, async non-blocking)
+    // Persist Step 1 before claiming success so the issued reference is recoverable.
     if (!invoiceAuditMode && APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
-        (async () => {
-            try {
-                const dataObj = collectFormData(refId);
-                dataObj.Status = isFreeReg ? 'Submitted' : 'Pending Payment';
-                const studentIdInput = document.getElementById('studentId');
-                if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
-                await fetch(APPS_SCRIPT_URL, {
-                    method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(dataObj)
-                });
-            } catch (_) {}
-        })();
+        try {
+            const dataObj = collectFormData(refId);
+            dataObj.Status = isFreeReg ? 'Submitted' : 'Pending Payment';
+            const studentIdInput = document.getElementById('studentId');
+            if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
+            if (!await submitToGoogleDrive(dataObj)) {
+                showToast('Reference not saved. Please retry Step 1 before making payment.', 'error');
+                return;
+            }
+        } catch (error) {
+            showToast(error.message || 'Reference not saved. Please retry Step 1.', 'error');
+            return;
+        }
     }
+    doc.save(pdfFileName);
 
     // Reveal Step 2 (configured for free or paid flow) and scroll into view
     _setupStep2(isFreeReg);
@@ -2170,7 +2200,7 @@ function restoreDraft() {
     if (!formDraft) return;
 
     // 1. Initial Type & Section Load
-    const toggles = ['Registering_Main', 'Registering_Award', 'Registering_Excursion', 'Registering_PreConf'];
+    const toggles = ['Registering_Main', 'Registering_Award', 'Registering_Excursion', 'Registering_PreConf', 'Registering_Conference_Workshops'];
     toggles.forEach(t => {
         if (formDraft[t] === true) {
             const el = document.querySelector(`[name="${t}"]`);
@@ -2693,6 +2723,7 @@ function openRecordModal(sub) {
             fields: [
                 ['Number of Papers',    sub.Number_of_Papers],
                 ['Pre-Conf Sessions',   sub.PreConf_Sessions],
+                ['Conference Workshops', sub.Conference_Workshops],
                 ['Food Preference',     sub.Food_Preference],
                 ['Include Inauguration',sub.Include_Inauguration],
             ]
@@ -2732,7 +2763,7 @@ function openRecordModal(sub) {
                 ${filledFields.map(([label, val]) =>
                     `<div class="record-field">
                         <div class="rf-label">${escHtml(label)}</div>
-                        <div class="rf-value">${val || '<span class="rf-empty">—</span>'}</div>
+                        <div class="rf-value">${label === 'Drive Folder' ? val : escHtml(String(val || '—'))}</div>
                     </div>`
                 ).join('')}
             </div>
@@ -3098,12 +3129,12 @@ function updatePaymentProofUI() {
         const isImg = file.type.startsWith('image/');
         const sizeMB = (file.size / 1048576).toFixed(2);
         const thumb = isImg
-            ? `<img class="proof-thumb" src="${URL.createObjectURL(file)}" alt="${file.name}">`
+            ? `<img class="proof-thumb" src="${URL.createObjectURL(file)}" alt="${escHtml(file.name)}">`
             : `<div class="proof-pdf-icon"><i class='bx bxs-file-pdf'></i></div>`;
         return `<div class="proof-preview-item">
             ${thumb}
             <div class="proof-info">
-                <span class="proof-name" title="${file.name}">${file.name}</span>
+                <span class="proof-name" title="${escHtml(file.name)}">${escHtml(file.name)}</span>
                 <span class="proof-size">${sizeMB} MB</span>
             </div>
             <button type="button" class="proof-remove" onclick="removePaymentProof(${i})" title="Remove">
@@ -3135,16 +3166,16 @@ async function fetchAndShowPaymentProofs(refId, container) {
         container.innerHTML = json.files.map(f => {
             const isImg = (f.mimeType || '').startsWith('image/');
             const thumb = isImg
-                ? `<img class="proof-thumb-admin" src="https://drive.google.com/thumbnail?id=${f.fileId}&sz=w400" alt="${f.name}" onerror="this.style.display='none'">`
+                ? `<img class="proof-thumb-admin" src="https://drive.google.com/thumbnail?id=${encodeURIComponent(f.fileId)}&sz=w400" alt="${escHtml(f.name)}" onerror="this.style.display='none'">`
                 : `<div class="proof-pdf-icon proof-pdf-admin"><i class='bx bxs-file-pdf'></i></div>`;
-            return `<a class="proof-drive-card" href="${f.url}" target="_blank" rel="noopener" title="Open ${f.name} in Drive">
+            return `<a class="proof-drive-card" href="${escHtml(f.url)}" target="_blank" rel="noopener" title="Open ${escHtml(f.name)} in Drive">
                 ${thumb}
-                <span class="proof-name">${f.name}</span>
+                <span class="proof-name">${escHtml(f.name)}</span>
                 <span class="proof-open-hint"><i class='bx bx-link-external'></i> Open in Drive</span>
             </a>`;
         }).join('');
     } catch (err) {
-        container.innerHTML = `<p style="color:#e05;font-size:0.85rem;">Could not load files: ${err.message}</p>`;
+        container.innerHTML = `<p style="color:#e05;font-size:0.85rem;">Could not load files: ${escHtml(err.message)}</p>`;
     }
 }
 
@@ -3587,7 +3618,7 @@ function rebuildConferenceWorkshopCheckboxes() {
         const toggle = document.getElementById('toggleConferenceWorkshops'); if (toggle) toggle.checked = false;
         return;
     }
-    container.innerHTML = items.map(item => `<div class="form-checkbox mb-2"><input type="checkbox" id="cw_${item.id}" class="conference-workshop-check" data-workshop-id="${item.id}"><label for="cw_${item.id}">${item.name}${item.event_date ? ' — ' + item.event_date : ''}</label></div>`).join('');
+    container.innerHTML = items.map(item => `<div class="form-checkbox mb-2"><input type="checkbox" id="cw_${item.id}" name="Conference_Workshop_${item.id}" class="conference-workshop-check" data-workshop-id="${item.id}"><label for="cw_${item.id}">${escHtml(item.name)}${item.event_date ? ' — ' + item.event_date : ''}</label></div>`).join('');
 }
 function renderConferenceWorkshopsAdmin() {
     const list = document.getElementById('conference-workshops-list'); if (!list) return;
@@ -3817,10 +3848,8 @@ async function resolveSettings() {
                     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
                     console.warn('No Drive settings file found; using defaults until an administrator saves settings.');
                 } else {
-                    // GAS returned an error — use defaults locally but don't overwrite Drive
-                    appSettings = mergeWithDefaults({});
-                    localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
-                    console.warn('Drive settings error:', json.error);
+                    // Preserve the last confirmed settings rather than silently changing live fees.
+                    throw new Error(json.error || 'Drive settings could not be loaded.');
                 }
 
                 if (overlay) overlay.style.display = 'none';
@@ -3833,7 +3862,7 @@ async function resolveSettings() {
     }
 
     // Network failure / Drive not configured: fall back to localStorage
-    const stored = JSON.parse(localStorage.getItem('sicet2026_settings') || 'null');
+    const stored = readLocalJson('sicet2026_settings');
     appSettings = mergeWithDefaults(stored || {});
     localStorage.setItem('sicet2026_settings', JSON.stringify(appSettings));
     if (overlay) overlay.style.display = 'none';
