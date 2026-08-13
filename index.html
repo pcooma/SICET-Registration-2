@@ -94,7 +94,7 @@
                     <p>Complete this form to register for SICET 2026. You may register for the Main Conference, Excellence Award, Pre-Conference Workshops, and/or Excursion.</p>
                 </div>
 
-                <form id="registration-form">
+                <form id="registration-form" novalidate>
                     <!-- Common Fields -->
                     <div class="form-group row">
                         <div class="input-field col">
@@ -196,6 +196,10 @@
                                 class="section-toggle price-trigger" value="Pre-Conference Workshops">
                             <label for="togglePreConf" style="font-weight: 600;">I am registering for Pre-Conference Workshops</label>
                         </div>
+                        <div class="form-checkbox" id="conference-workshops-toggle-row">
+                            <input type="checkbox" id="toggleConferenceWorkshops" class="section-toggle" value="Conference Workshops">
+                            <label for="toggleConferenceWorkshops" style="font-weight:600;">I plan to attend Technical Workshops during the Conference</label>
+                        </div>
                         <div id="reg-type-cost-preview"></div>
                     </div>
 
@@ -294,6 +298,12 @@
                                 <div id="workshop-id-status"></div>
                             </div>
                         </div>
+                    </div>
+
+                    <div id="section-conference-workshops" class="dynamic-section hidden">
+                        <h3 class="section-title">Technical Workshops During the Conference</h3>
+                        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:16px;">Select the research-focused workshops you plan to attend. You can update this registration later.</p>
+                        <div id="conference-workshops-container"></div>
                     </div>
 
                     <!-- 3. Excellence Award -->
@@ -747,6 +757,10 @@
                             <h4><i class='bx bx-calendar-event'></i> Pre-Conference Workshops Attendance</h4>
                             <div id="dash-sessions-breakdown"></div>
                         </div>
+                        <div class="dash-analysis-card full-width-card">
+                            <h4><i class='bx bx-presentation'></i> Conference Technical Workshops Interest</h4>
+                            <div id="dash-conference-workshops-breakdown"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -928,6 +942,14 @@
                         <button type="button" id="btn-add-session" class="btn btn-sm btn-primary mt-2">
                             <i class='bx bx-plus'></i> Add Workshop
                         </button>
+                        <p style="color:var(--text-muted);font-size:0.82rem;margin-top:10px;">Each workshop stays visible through its event date and is hidden automatically afterward.</p>
+                    </div>
+
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bx-presentation'></i> Technical Workshops During Conference Days</h3>
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">Add these after the programme is arranged. Inactive or expired workshops are hidden from participants.</p>
+                        <div id="conference-workshops-list"></div>
+                        <button type="button" id="btn-add-conference-workshop" class="btn btn-sm btn-primary mt-2"><i class='bx bx-plus'></i> Add Conference Workshop</button>
                     </div>
 
                     <!-- APC Journals Config -->
@@ -1042,7 +1064,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=88"></script>
+    <script src="app.js?v=89"></script>
 </body>
 
 </html>

@@ -28,6 +28,7 @@ const defaultSettings = {
         { id: 'pcs4', name: '6 G wireless Communication (on-line)', fee_local: 1500, fee_saarc: 15, fee_nonsaarc: 25, academic_discount_pct: 0, student_discount_pct: 0 },
         { id: 'pcs5', name: 'GIS for Civil Engineers', fee_local: 8000, fee_saarc: 30, fee_nonsaarc: 40, academic_discount_pct: 0, student_discount_pct: 0 }
     ],
+    conference_workshops: [],
     categories: [
         { id: 'author',           label: 'Author',                fee_local: 15000, fee_saarc: 150, fee_nonsaarc: 250, is_student: false, no_papers: false, paper_discount: true,  is_workshop_only: false },
         { id: 'nonauthor',        label: 'Non-Author',            fee_local: 12000, fee_saarc: 120, fee_nonsaarc: 200, is_student: false, no_papers: true,  paper_discount: false, is_workshop_only: false },
@@ -59,7 +60,8 @@ const registrationForm = document.getElementById('registration-form');
 const sections = {
     'Main Conference':  document.getElementById('section-main'),
     'Excellence Award': document.getElementById('section-award'),
-    'Excursion':        document.getElementById('section-excursion')
+    'Excursion':        document.getElementById('section-excursion'),
+    'Conference Workshops': document.getElementById('section-conference-workshops')
 };
 
 // Navigation
@@ -111,6 +113,7 @@ async function init() {
     populateJournalsDropdown();
     rebuildCategoryDropdown();
     rebuildSessionCheckboxes();
+    rebuildConferenceWorkshopCheckboxes();
     rebuildAwardCategoryDropdown();
     rebuildAwardPurposeDropdown();
     rebuildExcursionMobilityDropdown();
@@ -152,7 +155,7 @@ function setupEventListeners() {
             if (sharedSess) {
                 const mainOn    = document.getElementById('toggleMain').checked;
                 const preconfOn = document.getElementById('togglePreConf').checked;
-                const hasSessions = (appSettings.pre_conference_sessions || []).length > 0;
+                const hasSessions = (appSettings.pre_conference_sessions || []).some(workshopIsAvailable);
                 if ((mainOn || preconfOn) && hasSessions && !appSettings.preconf_workshops_hidden) sharedSess.classList.remove('hidden');
                 else sharedSess.classList.add('hidden');
                 // Workshop discount section: shown only when a checked workshop actually offers a discount
@@ -523,6 +526,7 @@ function setupEventListeners() {
     document.getElementById('btn-add-journal').addEventListener('click', addJournalField);
     document.getElementById('btn-add-category')?.addEventListener('click', addCategoryField);
     document.getElementById('btn-add-session')?.addEventListener('click', addSessionField);
+    document.getElementById('btn-add-conference-workshop')?.addEventListener('click', addConferenceWorkshopField);
 }
 
 // ---- DYNAMIC UI LOGIC ----
@@ -693,10 +697,27 @@ function normalizeSectionToggleState(toggle) {
 }
 
 function validateActiveProductSelections() {
+    const invalid = Array.from(registrationForm.querySelectorAll('[required]')).find(field =>
+        !field.disabled && field.offsetParent !== null && !field.checkValidity());
+    if (invalid) {
+        const label = registrationForm.querySelector(`label[for="${invalid.id}"]`)?.textContent?.replace('*', '').trim() || 'all required fields';
+        showToast(`Please complete ${label}.`, 'error');
+        invalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => invalid.focus({ preventScroll: true }), 350);
+        return false;
+    }
+    if (!Array.from(document.querySelectorAll('.section-toggle')).some(toggle => toggle.checked)) {
+        showToast('Please select at least one registration option.', 'error');
+        return false;
+    }
     if (document.getElementById('togglePreConf')?.checked &&
         document.querySelectorAll('.preconf-session-check:checked').length === 0) {
         showToast('Please select at least one Pre-Conference Workshop.', 'error');
         document.getElementById('section-preconf-sessions')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+    if (document.getElementById('toggleConferenceWorkshops')?.checked && !document.querySelector('.conference-workshop-check:checked')) {
+        showToast('Please select at least one technical workshop during the conference.', 'error');
         return false;
     }
 
@@ -1230,10 +1251,11 @@ function collectFormData(refId) {
     if (document.getElementById('toggleAward').checked)      typesArr.push('Award');
     if (document.getElementById('toggleExcursion').checked)  typesArr.push('Excursion');
     if (document.getElementById('togglePreConf')?.checked)   typesArr.push('Pre-Conference Workshops');
+    if (document.getElementById('toggleConferenceWorkshops')?.checked) typesArr.push('Conference Workshops');
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
     const selectedCategory = document.getElementById('attendeeCategory')?.selectedOptions?.[0];
     dataObj['Attendee_Category_ID'] = selectedCategory?.dataset?.categoryId || '';
-    dataObj['Record_Schema_Version'] = 2;
+    dataObj['Record_Schema_Version'] = 3;
     dataObj['Settings_Version'] = appSettings?._meta?.version || 'legacy-unversioned';
 
     // Serialize selected pre-conference session names for the admin sheet
@@ -1249,6 +1271,14 @@ function collectFormData(refId) {
     dataObj['PreConf_Sessions'] = selectedSessionNames.join(', ');
     dataObj['PreConf_Session_IDs'] = selectedSessionIds.join(', ');
     dataObj['Workshop_Discount_Tier'] = document.getElementById('workshopDiscountTier')?.value || 'regular';
+    const conferenceItems = [];
+    const conferenceIds = [];
+    document.querySelectorAll('.conference-workshop-check:checked').forEach(chk => {
+        const item = (appSettings.conference_workshops || []).find(workshop => workshop.id === chk.dataset.workshopId);
+        if (item) { conferenceItems.push(item.name); conferenceIds.push(item.id); }
+    });
+    dataObj['Conference_Workshops'] = conferenceItems.join(', ');
+    dataObj['Conference_Workshop_IDs'] = conferenceIds.join(', ');
 
     // Normalize conditional fields at the submission boundary. Hidden or
     // imported stale values must not become operational commitments.
@@ -2447,6 +2477,9 @@ function renderOverviewTab() {
             }).join('') + `</tbody></table>`;
     }
     set('dash-sessions-breakdown', sessHtml);
+    const conferenceRows = [];
+    submissions.forEach(sub => String(sub.Conference_Workshops || '').split(',').map(name => name.trim()).filter(Boolean).forEach(name => conferenceRows.push({ name })));
+    set('dash-conference-workshops-breakdown', buildBreakdown(conferenceRows, 'name'));
 }
 
 // ---- Logistics Tab ----
@@ -2783,6 +2816,7 @@ function populateSettingsForm() {
     // Categories & Sessions
     renderCategoriesAdmin();
     renderSessionsAdmin();
+    renderConferenceWorkshopsAdmin();
     // Award & Excursion options
     renderAwardOptionsAdmin();
     renderExcursionOptionsAdmin();
@@ -2884,6 +2918,7 @@ async function saveSettings(e) {
     saveCategoriesFromAdmin();
     // Sessions
     saveSessionsFromAdmin();
+    saveConferenceWorkshopsFromAdmin();
     // Award & Excursion dropdown options
     saveAwardOptionsFromAdmin();
     saveExcursionOptionsFromAdmin();
@@ -2897,6 +2932,7 @@ async function saveSettings(e) {
         appSettings = previousSettings;
         rebuildCategoryDropdown();
         rebuildSessionCheckboxes();
+        rebuildConferenceWorkshopCheckboxes();
         populateJournalsDropdown();
         rebuildAwardCategoryDropdown();
         rebuildAwardPurposeDropdown();
@@ -2912,6 +2948,7 @@ async function saveSettings(e) {
     populateJournalsDropdown();
     rebuildCategoryDropdown();
     rebuildSessionCheckboxes();
+    rebuildConferenceWorkshopCheckboxes();
     rebuildAwardCategoryDropdown();
     rebuildAwardPurposeDropdown();
     rebuildExcursionMobilityDropdown();
@@ -3418,7 +3455,7 @@ function applyPreconfVisibility() {
         } else {
             const mainOn    = document.getElementById('toggleMain')?.checked;
             const preconfOn = togglePreConf?.checked;
-            const hasSessions = (appSettings.pre_conference_sessions || []).length > 0;
+            const hasSessions = (appSettings.pre_conference_sessions || []).some(workshopIsAvailable);
             if ((mainOn || preconfOn) && hasSessions) sharedSess.classList.remove('hidden');
             else sharedSess.classList.add('hidden');
         }
@@ -3448,9 +3485,10 @@ function renderSessionsAdmin() {
         const div = document.createElement('div');
         div.className = 'session-entry form-group';
         div.dataset.itemId = sess.id;
-        div.style.cssText = 'display:grid;grid-template-columns:2fr 90px 90px 90px 70px 70px 36px;gap:8px;align-items:end;margin-bottom:8px;';
+        div.style.cssText = 'display:grid;grid-template-columns:2fr 135px 90px 90px 90px 70px 70px 36px;gap:8px;align-items:end;margin-bottom:8px;';
         div.innerHTML = `
             <div class="input-field"><label>Workshop Name</label><input type="text" class="sess-name" value="${sess.name}" required></div>
+            <div class="input-field"><label>Event Date</label><input type="date" class="sess-event-date" value="${sess.event_date || ''}" required></div>
             <div class="input-field"><label>Local (LKR)</label><input type="number" class="sess-fee-local" value="${sess.fee_local}" required></div>
             <div class="input-field"><label>SAARC (USD)</label><input type="number" class="sess-fee-saarc" value="${sess.fee_saarc}" required></div>
             <div class="input-field"><label>Non-SAARC (USD)</label><input type="number" class="sess-fee-nonsaarc" value="${sess.fee_nonsaarc}" required></div>
@@ -3470,7 +3508,7 @@ window.removeSession = function(idx) {
 
 function addSessionField() {
     if (!appSettings.pre_conference_sessions) appSettings.pre_conference_sessions = [];
-    appSettings.pre_conference_sessions.push({ id: 'sess_' + Date.now(), name: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0, academic_discount_pct: 0, student_discount_pct: 0 });
+    appSettings.pre_conference_sessions.push({ id: 'sess_' + Date.now(), name: '', event_date: '', fee_local: 0, fee_saarc: 0, fee_nonsaarc: 0, academic_discount_pct: 0, student_discount_pct: 0 });
     renderSessionsAdmin();
 }
 
@@ -3483,6 +3521,7 @@ function saveSessionsFromAdmin() {
             sessions.push({
                 id: row.dataset.itemId || 'sess_' + Date.now() + '_' + i,
                 name,
+                event_date: row.querySelector('.sess-event-date')?.value || '',
                 fee_local:             Number(row.querySelector('.sess-fee-local')?.value) || 0,
                 fee_saarc:             Number(row.querySelector('.sess-fee-saarc')?.value) || 0,
                 fee_nonsaarc:          Number(row.querySelector('.sess-fee-nonsaarc')?.value) || 0,
@@ -3498,7 +3537,8 @@ function saveSessionsFromAdmin() {
 function rebuildSessionCheckboxes() {
     const container = document.getElementById('preconf-sessions-container');
     if (!container) return;
-    const sessions = appSettings.pre_conference_sessions || [];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const sessions = (appSettings.pre_conference_sessions || []).filter(sess => !sess.event_date || sess.event_date >= today);
     if (sessions.length === 0) {
         container.innerHTML = '';
         container.closest('#preconf-sessions-section')?.classList.add('hidden');
@@ -3512,7 +3552,7 @@ function rebuildSessionCheckboxes() {
         div.className = 'form-checkbox mb-2';
         div.innerHTML = `
             <input type="checkbox" id="sess_${sess.id}" name="PreConf_${sess.id}" class="preconf-session-check price-trigger" data-sess-id="${sess.id}">
-            <label for="sess_${sess.id}">${sess.name}</label>
+            <label for="sess_${sess.id}">${sess.name}${sess.event_date ? ' — ' + sess.event_date : ''}</label>
         `;
         container.appendChild(div);
     });
@@ -3529,6 +3569,34 @@ function rebuildSessionCheckboxes() {
             calculateTotalFee();
         });
     });
+}
+
+function currentColomboDate() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+function workshopIsAvailable(item) { return item?.active !== false && (!item?.event_date || item.event_date >= currentColomboDate()); }
+function rebuildConferenceWorkshopCheckboxes() {
+    const container = document.getElementById('conference-workshops-container');
+    const row = document.getElementById('conference-workshops-toggle-row');
+    if (!container || !row) return;
+    const items = (appSettings.conference_workshops || []).filter(workshopIsAvailable);
+    row.classList.toggle('hidden', items.length === 0);
+    if (!items.length) {
+        container.innerHTML = '';
+        document.getElementById('section-conference-workshops')?.classList.add('hidden');
+        const toggle = document.getElementById('toggleConferenceWorkshops'); if (toggle) toggle.checked = false;
+        return;
+    }
+    container.innerHTML = items.map(item => `<div class="form-checkbox mb-2"><input type="checkbox" id="cw_${item.id}" class="conference-workshop-check" data-workshop-id="${item.id}"><label for="cw_${item.id}">${item.name}${item.event_date ? ' — ' + item.event_date : ''}</label></div>`).join('');
+}
+function renderConferenceWorkshopsAdmin() {
+    const list = document.getElementById('conference-workshops-list'); if (!list) return;
+    list.innerHTML = (appSettings.conference_workshops || []).map((item, idx) => `<div class="conference-workshop-entry form-group" data-item-id="${item.id}" style="display:grid;grid-template-columns:2fr 150px 90px 36px;gap:8px;align-items:end;margin-bottom:8px"><div class="input-field"><label>Workshop Name</label><input class="conference-workshop-name" value="${item.name || ''}" required></div><div class="input-field"><label>Event Date</label><input type="date" class="conference-workshop-date" value="${item.event_date || ''}" required></div><label style="padding-bottom:10px"><input type="checkbox" class="conference-workshop-active" ${item.active !== false ? 'checked' : ''}> Active</label><button type="button" class="btn-remove-journal" onclick="removeConferenceWorkshop(${idx})"><i class='bx bx-trash'></i></button></div>`).join('');
+}
+function addConferenceWorkshopField() { appSettings.conference_workshops ||= []; appSettings.conference_workshops.push({ id: 'cw_' + Date.now(), name: '', event_date: '', active: true }); renderConferenceWorkshopsAdmin(); }
+window.removeConferenceWorkshop = function(idx) { appSettings.conference_workshops.splice(idx, 1); renderConferenceWorkshopsAdmin(); };
+function saveConferenceWorkshopsFromAdmin() {
+    appSettings.conference_workshops = Array.from(document.querySelectorAll('.conference-workshop-entry')).map((row, i) => ({ id: row.dataset.itemId || 'cw_' + Date.now() + '_' + i, name: row.querySelector('.conference-workshop-name').value.trim(), event_date: row.querySelector('.conference-workshop-date').value, active: row.querySelector('.conference-workshop-active').checked })).filter(item => item.name);
 }
 
 // ---- AWARD & EXCURSION DROPDOWN REBUILDERS ----

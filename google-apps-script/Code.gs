@@ -31,7 +31,7 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 const SETTINGS_FILE_NAME = 'sicet2026_settings.json';
 const SETTINGS_HISTORY_FOLDER_NAME = 'Settings History';
-const RECORD_SCHEMA_VERSION = 2;
+const RECORD_SCHEMA_VERSION = 3;
 const MASTER_HEADERS = [
   'Submission_Date', 'Invoice_ID', 'Status',
   'Title', 'Full_Name', 'Email', 'Phone',
@@ -49,7 +49,8 @@ const MASTER_HEADERS = [
   'Transaction_Ref', 'Additional_Info', 'Drive_Folder_URL',
   // Append-only evolution fields. Never rename/remove older columns.
   'Record_Schema_Version', 'Settings_Version', 'Attendee_Category_ID',
-  'PreConf_Session_IDs', 'Pricing_Snapshot'
+  'PreConf_Session_IDs', 'Pricing_Snapshot',
+  'Conference_Workshops', 'Conference_Workshop_IDs'
 ];
 
 /**
@@ -359,6 +360,7 @@ function validateSettings(input) {
   const errors = [];
   validateSettingsCollection(settings.categories, 'category', 'label', errors);
   validateSettingsCollection(settings.pre_conference_sessions || [], 'workshop', 'name', errors);
+  validateSettingsCollection(settings.conference_workshops || [], 'conference workshop', 'name', errors);
   validateSettingsCollection(settings.journals || [], 'journal', 'name', errors);
   (settings.journals || []).forEach(function(journal) {
     journal.apc_not_applicable = journal.apc_not_applicable === true;
@@ -486,6 +488,9 @@ function validateRegistration(input, mainFolder) {
   if (registrationTypes.indexOf('Pre-Conference Workshops') >= 0 &&
       !String(data.PreConf_Session_IDs || data.PreConf_Sessions || '').trim()) {
     errors.push('Select at least one pre-conference workshop.');
+  }
+  if (registrationTypes.indexOf('Conference Workshops') >= 0 && !String(data.Conference_Workshop_IDs || '').trim()) {
+    errors.push('Select at least one technical workshop during the conference.');
   }
   if (registrationTypes.indexOf('Excursion') >= 0) {
     const excursionCount = data.Attendee_Region === 'Local'
@@ -617,6 +622,7 @@ function normalizeConditionalRegistration(data, category) {
   const hasAward = registrationTypes.indexOf('Award') >= 0;
   const hasExcursion = registrationTypes.indexOf('Excursion') >= 0;
   const hasPreConf = registrationTypes.indexOf('Pre-Conference Workshops') >= 0;
+  const hasConferenceWorkshops = registrationTypes.indexOf('Conference Workshops') >= 0;
 
   if (!hasMain) {
     data.Number_of_Papers = '0';
@@ -646,6 +652,10 @@ function normalizeConditionalRegistration(data, category) {
     data.PreConf_Sessions = '';
     data.PreConf_Session_IDs = '';
     data.Workshop_Discount_Tier = 'regular';
+  }
+  if (!hasConferenceWorkshops) {
+    data.Conference_Workshops = '';
+    data.Conference_Workshop_IDs = '';
   }
   if (category && (category.no_papers || category.is_workshop_only)) {
     data.Number_of_Papers = '0';
@@ -745,7 +755,9 @@ function buildRow(headers, data, folderUrl) {
     Settings_Version:      data.Settings_Version       || '',
     Attendee_Category_ID:  data.Attendee_Category_ID   || '',
     PreConf_Session_IDs:   data.PreConf_Session_IDs    || '',
-    Pricing_Snapshot:      data.Pricing_Snapshot       || ''
+    Pricing_Snapshot:      data.Pricing_Snapshot       || '',
+    Conference_Workshops: data.Conference_Workshops || '',
+    Conference_Workshop_IDs: data.Conference_Workshop_IDs || ''
   };
   return headers.map(h => map[h] !== undefined ? map[h] : (data[h] || ''));
 }
