@@ -162,6 +162,8 @@ assert.equal(historicalExpiredErrors.length, 0, 'returning records may preserve 
 const disabledErrors = [];
 sandbox.validateEventSelections('disabled', [{ id: 'disabled', active: false }], '', '2026-08-13', 'workshop', disabledErrors);
 assert.equal(disabledErrors.length, 1, 'new registrations must reject disabled workshop IDs');
+assert.equal(sandbox.hasRegistrationType('Pre-Conference Workshops', 'Conference Workshops'), false, 'pre-conference must not be misclassified as conference-day workshops');
+assert.equal(sandbox.hasRegistrationType('Main + Conference Workshops', 'Conference Workshops'), true, 'exact combined product tokens must be recognized');
 
 const serverPrice = sandbox.calculateAuthoritativeFee({
   Registration_Type: 'Main + Award', Attendee_Region: 'Local', Number_of_Papers: '2', Participant_Count: '1'

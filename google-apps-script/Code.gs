@@ -487,8 +487,8 @@ function validateRegistration(input, mainFolder) {
   const registrationTypes = String(data.Registration_Type || '');
   let settings = null;
   let todayColombo = '';
-  const hasPreConferenceSelection = registrationTypes.indexOf('Pre-Conference Workshops') >= 0 && String(data.PreConf_Session_IDs || '').trim();
-  const hasConferenceSelection = registrationTypes.indexOf('Conference Workshops') >= 0 && String(data.Conference_Workshop_IDs || '').trim();
+  const hasPreConferenceSelection = hasRegistrationType(registrationTypes, 'Pre-Conference Workshops') && String(data.PreConf_Session_IDs || '').trim();
+  const hasConferenceSelection = hasRegistrationType(registrationTypes, 'Conference Workshops') && String(data.Conference_Workshop_IDs || '').trim();
   if (hasPreConferenceSelection || hasConferenceSelection) {
     settings = readCurrentSettings(mainFolder);
     todayColombo = Utilities.formatDate(new Date(), 'Asia/Colombo', 'yyyy-MM-dd');
@@ -498,20 +498,20 @@ function validateRegistration(input, mainFolder) {
   if (existing) {
     try { saved = getRegistrationByRef(data.Invoice_ID); } catch (_) {}
   }
-  if (registrationTypes.indexOf('Pre-Conference Workshops') >= 0 &&
+  if (hasRegistrationType(registrationTypes, 'Pre-Conference Workshops') &&
       !String(data.PreConf_Session_IDs || data.PreConf_Sessions || '').trim()) {
     errors.push('Select at least one pre-conference workshop.');
   }
   if (hasPreConferenceSelection) {
     validateEventSelections(data.PreConf_Session_IDs, settings.pre_conference_sessions || [], saved && saved.PreConf_Session_IDs, todayColombo, 'pre-conference workshop', errors);
   }
-  if (registrationTypes.indexOf('Conference Workshops') >= 0 && !String(data.Conference_Workshop_IDs || '').trim()) {
+  if (hasRegistrationType(registrationTypes, 'Conference Workshops') && !String(data.Conference_Workshop_IDs || '').trim()) {
     errors.push('Select at least one technical workshop during the conference.');
   }
   if (hasConferenceSelection) {
     validateEventSelections(data.Conference_Workshop_IDs, settings.conference_workshops || [], saved && saved.Conference_Workshop_IDs, todayColombo, 'conference workshop', errors);
   }
-  if (registrationTypes.indexOf('Excursion') >= 0) {
+  if (hasRegistrationType(registrationTypes, 'Excursion')) {
     const excursionCount = data.Attendee_Region === 'Local'
       ? Number(data.Excursion_Local_Count || 0)
       : Number(data.Excursion_Foreign_Count || 0);
@@ -519,7 +519,7 @@ function validateRegistration(input, mainFolder) {
       errors.push('Excursion registration requires at least one participant.');
     }
   }
-  if (registrationTypes.indexOf('Award') >= 0) {
+  if (hasRegistrationType(registrationTypes, 'Award')) {
     const awardCount = Number(data.Participant_Count || 0);
     if (!isFinite(awardCount) || Math.floor(awardCount) !== awardCount || awardCount < 1) {
       errors.push('Excellence Award registration requires at least one participant.');
@@ -547,6 +547,10 @@ function validateEventSelections(requestedValue, configuredItems, savedValue, to
     const currentlyAvailable = item && item.active !== false && (!item.event_date || item.event_date >= today);
     if (!currentlyAvailable && savedIds.indexOf(id) < 0) errors.push('Selected ' + label + ' is unavailable or expired. Refresh and choose an active option.');
   });
+}
+
+function hasRegistrationType(value, expected) {
+  return String(value || '').split('+').map(function(type) { return type.trim(); }).indexOf(expected) >= 0;
 }
 
 function readCurrentSettings(mainFolder) {
@@ -670,7 +674,7 @@ function calculateAuthoritativeFee(data, settings, category, selectedSessions) {
     return currency === 'LKR' ? Math.round(amount * fx) : Number((amount / fx).toFixed(2));
   }
   let total = 0;
-  if (registrationTypes.indexOf('Main') >= 0 && !category.is_workshop_only) {
+  if (hasRegistrationType(registrationTypes, 'Main') && !category.is_workshop_only) {
     const baseFee = Number(isLocal ? category.fee_local : (data.Attendee_Region === 'SAARC' ? category.fee_saarc : category.fee_nonsaarc)) || 0;
     const paperCount = category.no_papers ? 1 : Math.max(1, Math.min(10, Number(data.Number_of_Papers) || 1));
     if (category.no_papers || paperCount === 1) total += baseFee;
@@ -690,7 +694,7 @@ function calculateAuthoritativeFee(data, settings, category, selectedSessions) {
     });
     if (data.Include_Inauguration) total += Number(isLocal ? settings.inauguration_fee : settings.inauguration_fee_usd) || 0;
   }
-  if (registrationTypes.indexOf('Pre-Conference Workshops') >= 0) {
+  if (hasRegistrationType(registrationTypes, 'Pre-Conference Workshops')) {
     const tier = String(data.Workshop_Discount_Tier || 'regular');
     selectedSessions.forEach(function(session) {
       const raw = Number(isLocal ? session.fee_local : (data.Attendee_Region === 'SAARC' ? session.fee_saarc : session.fee_nonsaarc)) || 0;
@@ -698,10 +702,10 @@ function calculateAuthoritativeFee(data, settings, category, selectedSessions) {
       total += isLocal ? Math.round(raw * (1 - discount / 100)) : Number((raw * (1 - discount / 100)).toFixed(2));
     });
   }
-  if (registrationTypes.indexOf('Award') >= 0) {
+  if (hasRegistrationType(registrationTypes, 'Award')) {
     total += convert((Number(settings.award_fee) || 0) * (Number(data.Participant_Count) || 0), 'LKR');
   }
-  if (registrationTypes.indexOf('Excursion') >= 0) {
+  if (hasRegistrationType(registrationTypes, 'Excursion')) {
     total += isLocal
       ? (Number(settings.excursion_fees && settings.excursion_fees.local) || 0) * (Number(data.Excursion_Local_Count) || 0)
       : (Number(settings.excursion_fees && settings.excursion_fees.foreigner) || 0) * (Number(data.Excursion_Foreign_Count) || 0);
@@ -711,11 +715,11 @@ function calculateAuthoritativeFee(data, settings, category, selectedSessions) {
 
 function normalizeConditionalRegistration(data, category) {
   const registrationTypes = String(data.Registration_Type || '');
-  const hasMain = registrationTypes.indexOf('Main') >= 0;
-  const hasAward = registrationTypes.indexOf('Award') >= 0;
-  const hasExcursion = registrationTypes.indexOf('Excursion') >= 0;
-  const hasPreConf = registrationTypes.indexOf('Pre-Conference Workshops') >= 0;
-  const hasConferenceWorkshops = registrationTypes.indexOf('Conference Workshops') >= 0;
+  const hasMain = hasRegistrationType(registrationTypes, 'Main');
+  const hasAward = hasRegistrationType(registrationTypes, 'Award');
+  const hasExcursion = hasRegistrationType(registrationTypes, 'Excursion');
+  const hasPreConf = hasRegistrationType(registrationTypes, 'Pre-Conference Workshops');
+  const hasConferenceWorkshops = hasRegistrationType(registrationTypes, 'Conference Workshops');
 
   if (!hasMain) {
     data.Number_of_Papers = '0';
