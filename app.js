@@ -950,7 +950,10 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
     const el = document.getElementById('preconf-cost-preview');
     if (!el) return;
 
-    const sessions = appSettings.pre_conference_sessions || [];
+    // Keep the fee summary aligned with the selectable workshop list. Expired
+    // or explicitly inactive workshops remain in settings/history, but must not
+    // be advertised to new registrants.
+    const sessions = (appSettings.pre_conference_sessions || []).filter(workshopIsAvailable);
     if (!sessions.length) { el.innerHTML = ''; return; }
 
     const tier    = document.getElementById('workshopDiscountTier')?.value || 'regular';
@@ -3568,8 +3571,7 @@ function saveSessionsFromAdmin() {
 function rebuildSessionCheckboxes() {
     const container = document.getElementById('preconf-sessions-container');
     if (!container) return;
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    const sessions = (appSettings.pre_conference_sessions || []).filter(sess => !sess.event_date || sess.event_date >= today);
+    const sessions = (appSettings.pre_conference_sessions || []).filter(workshopIsAvailable);
     if (sessions.length === 0) {
         container.innerHTML = '';
         container.closest('#preconf-sessions-section')?.classList.add('hidden');
