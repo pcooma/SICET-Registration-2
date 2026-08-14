@@ -793,6 +793,8 @@ function normalizeConditionalRegistration(data, category) {
   }
   if (category && (category.no_papers || category.is_workshop_only)) {
     data.Number_of_Papers = '0';
+    data.Paper_Details = '';
+    data.CMT_Changes = '';
   }
   if (!category || !category.is_student) {
     data.Include_Inauguration = '';

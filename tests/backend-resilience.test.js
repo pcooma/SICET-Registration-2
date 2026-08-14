@@ -119,12 +119,14 @@ assert.equal(replacementFiles.find(file => file.id === 'new').name, 'settings.js
 const normalizedNoPapers = sandbox.normalizeConditionalRegistration({
   Registration_Type: 'Main + Excursion',
   Number_of_Papers: '5',
+  CMT_Changes: 'Stale author-only note',
   Include_Inauguration: 'on',
   Attendee_Region: 'SAARC',
   Excursion_Local_Count: '5',
   Excursion_Foreign_Count: '2'
 }, { no_papers: true, is_student: false, is_workshop_only: false });
 assert.equal(normalizedNoPapers.Number_of_Papers, '0', 'no-papers category must discard hidden paper count');
+assert.equal(normalizedNoPapers.CMT_Changes, '', 'non-author categories must discard author-only CMT changes');
 assert.equal(normalizedNoPapers.Include_Inauguration, '', 'non-student category must discard inauguration opt-in');
 assert.equal(normalizedNoPapers.Excursion_Local_Count, '0', 'foreign region must discard hidden local excursion count');
 assert.equal(normalizedNoPapers.Excursion_Foreign_Count, '2');

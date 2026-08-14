@@ -231,6 +231,19 @@ function setupEventListeners() {
         const studentIdSection    = document.getElementById('studentIdSection');
         const studentRequired     = document.querySelector('.student-required');
         const designationGroup    = document.getElementById('designation-group');
+        const cmtChangesGroup     = document.getElementById('cmt-changes-group');
+        const cmtChangesField     = document.getElementById('cmtChanges');
+
+        if (isNoPapers || catDef?.is_workshop_only) {
+            cmtChangesGroup?.classList.add('hidden');
+            if (cmtChangesField) {
+                cmtChangesField.value = '';
+                cmtChangesField.disabled = true;
+            }
+        } else {
+            cmtChangesGroup?.classList.remove('hidden');
+            if (cmtChangesField) cmtChangesField.disabled = false;
+        }
 
         if (isNoPapers) {
             // No-papers category (e.g. Non-Author): hide papers and student ID
@@ -1327,6 +1340,7 @@ function collectFormData(refId) {
         category.id === dataObj.Attendee_Category_ID || category.label === dataObj.Attendee_Category);
     if (categoryDef?.no_papers || categoryDef?.is_workshop_only) {
         dataObj['Number_of_Papers'] = '0';
+        dataObj['CMT_Changes'] = '';
     }
     if (!categoryDef?.is_student) {
         delete dataObj['Include_Inauguration'];
