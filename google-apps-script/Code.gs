@@ -31,7 +31,7 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 const SETTINGS_FILE_NAME = 'sicet2026_settings.json';
 const SETTINGS_HISTORY_FOLDER_NAME = 'Settings History';
-const RECORD_SCHEMA_VERSION = 4;
+const RECORD_SCHEMA_VERSION = 5;
 const MASTER_HEADERS = [
   'Submission_Date', 'Invoice_ID', 'Status',
   'Title', 'Full_Name', 'Email', 'Phone',
@@ -51,7 +51,8 @@ const MASTER_HEADERS = [
   'Record_Schema_Version', 'Settings_Version', 'Attendee_Category_ID',
   'PreConf_Session_IDs', 'Pricing_Snapshot',
   'Conference_Workshops', 'Conference_Workshop_IDs',
-  'Paper_Details', 'CMT_Changes'
+  'Paper_Details', 'CMT_Changes',
+  'Transport_Mode', 'Vehicle_Number'
 ];
 
 /**
@@ -487,6 +488,15 @@ function validateRegistration(input, mainFolder) {
   });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.Email || ''))) errors.push('A valid email is required.');
   if (['Local','SAARC','Non-SAARC'].indexOf(data.Attendee_Region) < 0) errors.push('Invalid attendee region.');
+  if (data.Attendee_Region === 'Local') {
+    if (['Private Vehicle', 'Public Transport'].indexOf(String(data.Transport_Mode || '').trim()) < 0) {
+      errors.push('Select private vehicle or public transport.');
+    }
+    if (String(data.Transport_Mode || '').trim() === 'Private Vehicle' && !String(data.Vehicle_Number || '').trim()) {
+      errors.push('Vehicle registration number is required for private vehicles.');
+    }
+    if (String(data.Vehicle_Number || '').length > 30) errors.push('Vehicle registration number is too long.');
+  }
   if (!isValidRef(data.Invoice_ID)) errors.push('Invalid reference ID.');
   const registrationTypes = String(data.Registration_Type || '');
   let settings = null;
@@ -806,8 +816,13 @@ function normalizeConditionalRegistration(data, category) {
   }
   if (data.Attendee_Region === 'Local') {
     data.Excursion_Foreign_Count = '0';
+    data.Transport_Mode = String(data.Transport_Mode || '').trim();
+    data.Vehicle_Number = String(data.Vehicle_Number || '').trim().toUpperCase();
+    if (data.Transport_Mode !== 'Private Vehicle') data.Vehicle_Number = '';
   } else if (data.Attendee_Region) {
     data.Excursion_Local_Count = '0';
+    data.Transport_Mode = '';
+    data.Vehicle_Number = '';
   }
   return data;
 }
@@ -862,6 +877,8 @@ function buildRow(headers, data, folderUrl) {
     Attendee_Region:       data.Attendee_Region        || '',
     Country:               data.Country                || '',
     Attendee_Category:     data.Attendee_Category      || '',
+    Transport_Mode:        data.Transport_Mode         || '',
+    Vehicle_Number:        data.Vehicle_Number         || '',
     Registration_Type:     data.Registration_Type      || '',
     Calculated_Total_Fee:  data.Calculated_Total_Fee   || '',
     Currency:              data.Currency               || '',

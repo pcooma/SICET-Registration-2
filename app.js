@@ -537,6 +537,7 @@ function setupEventListeners() {
             }
         }
     });
+    document.getElementById('transportMode')?.addEventListener('change', updateTransportationVisibility);
 
     // Settings Actions
     document.getElementById('btn-save-settings').addEventListener('click', saveSettings);
@@ -667,7 +668,31 @@ function updateExcursionTicketVisibility() {
         }
     }
 
+    updateTransportationVisibility();
+
     calculateTotalFee();
+}
+
+function updateTransportationVisibility() {
+    const isLocal = document.getElementById('attendeeRegion')?.value === 'Local';
+    const section = document.getElementById('local-transportation-section');
+    const mode = document.getElementById('transportMode');
+    const vehicleGroup = document.getElementById('vehicle-number-group');
+    const vehicle = document.getElementById('vehicleNumber');
+    if (!section || !mode || !vehicleGroup || !vehicle) return;
+
+    section.classList.toggle('hidden', !isLocal);
+    mode.required = isLocal;
+    mode.disabled = !isLocal;
+    if (!isLocal) {
+        mode.value = '';
+        vehicle.value = '';
+    }
+    const needsVehicle = isLocal && mode.value === 'Private Vehicle';
+    vehicleGroup.classList.toggle('hidden', !needsVehicle);
+    vehicle.required = needsVehicle;
+    vehicle.disabled = !needsVehicle;
+    if (!needsVehicle) vehicle.value = '';
 }
 
 function normalizeSectionToggleState(toggle) {
@@ -1285,7 +1310,7 @@ function collectFormData(refId) {
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
     const selectedCategory = document.getElementById('attendeeCategory')?.selectedOptions?.[0];
     dataObj['Attendee_Category_ID'] = selectedCategory?.dataset?.categoryId || '';
-    dataObj['Record_Schema_Version'] = 4;
+    dataObj['Record_Schema_Version'] = 5;
     dataObj['Settings_Version'] = appSettings?._meta?.version || 'legacy-unversioned';
 
     // Serialize selected pre-conference session names for the admin sheet
@@ -1356,6 +1381,8 @@ function collectFormData(refId) {
         dataObj['Excursion_Foreign_Count'] = '0';
     } else if (dataObj.Attendee_Region) {
         dataObj['Excursion_Local_Count'] = '0';
+        dataObj['Transport_Mode'] = '';
+        dataObj['Vehicle_Number'] = '';
     }
     if (studentIdPreviouslyUploaded) dataObj['Student_ID_Base64'] = '(uploaded — see folder)';
     if (workshopIdPreviouslyUploaded) dataObj['Workshop_ID_Base64'] = '(uploaded — see folder)';
@@ -2427,6 +2454,11 @@ function updateAdminDashboard() {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     const workshopCount = submissions.filter(s => s.Registration_Type && s.Registration_Type.includes('Pre-Conference')).length;
     set('stat-workshops', workshopCount);
+    const uniqueVehicleNumbers = new Set(submissions
+        .filter(s => s.Attendee_Region === 'Local' && s.Transport_Mode === 'Private Vehicle')
+        .map(s => String(s.Vehicle_Number || '').trim().toUpperCase())
+        .filter(Boolean));
+    set('stat-private-vehicles', uniqueVehicleNumbers.size);
     set('stat-local',         localCount);
     set('stat-saarc',         saarcCount);
     set('stat-nonsaarc',      nonSaarc);
@@ -2586,6 +2618,13 @@ function renderLogisticsTab() {
 
     // Countries
     set('dash-countries-breakdown', buildBreakdown(submissions, 'Country'));
+    const localTransport = submissions.filter(s => s.Attendee_Region === 'Local');
+    set('dash-transport-breakdown', buildBreakdown(localTransport, s => {
+        if (s.Transport_Mode === 'Private Vehicle') {
+            return s.Vehicle_Number ? `Private Vehicle — ${s.Vehicle_Number}` : 'Private Vehicle — number missing';
+        }
+        return s.Transport_Mode || 'Not supplied (legacy record)';
+    }));
 
     // Revenue
     let revLKR = 0, revUSD = 0;
@@ -2734,6 +2773,8 @@ function openRecordModal(sub) {
                 ['Attendee Category',  sub.Attendee_Category],
                 ['Region',             sub.Attendee_Region],
                 ['Country',            sub.Country],
+                ['Transportation',     sub.Transport_Mode],
+                ['Vehicle Number',     sub.Vehicle_Number],
                 ['Registration Type',  sub.Registration_Type],
                 ['Primary Reason',     sub.Primary_Reason + (sub.Primary_Reason_Other ? ' — ' + sub.Primary_Reason_Other : '')],
             ]

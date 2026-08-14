@@ -164,6 +164,22 @@
                                 <option value="Workshop Attendee">Workshop Attendee</option>
                             </select>
                         </div>
+                        <div id="local-transportation-section" class="form-group row hidden" style="margin-top:15px;margin-bottom:0;">
+                            <div class="input-field col">
+                                <label for="transportMode">Transportation <span class="required">*</span></label>
+                                <select id="transportMode" name="Transport_Mode">
+                                    <option value="" disabled selected>Select transportation</option>
+                                    <option value="Private Vehicle">Private Vehicle</option>
+                                    <option value="Public Transport">Public Transport</option>
+                                </select>
+                                <small>Used only for campus access and parking planning.</small>
+                            </div>
+                            <div id="vehicle-number-group" class="input-field col hidden">
+                                <label for="vehicleNumber">Vehicle Registration Number <span class="required">*</span></label>
+                                <input type="text" id="vehicleNumber" name="Vehicle_Number" maxlength="30"
+                                    placeholder="E.g. CAB-1234" autocomplete="off">
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Inauguration Ceremony opt-in — shown for student-type categories only -->
@@ -736,6 +752,7 @@
                     <div class="stat-card"><i class='bx bx-book-content'></i><div class="stat-info"><h4 id="stat-papers">0</h4><span>Papers Submitted</span></div></div>
                     <div class="stat-card"><i class='bx bx-bus'></i><div class="stat-info"><h4 id="stat-excursion-pax">0</h4><span>Excursion Pax</span></div></div>
                     <div class="stat-card"><i class='bx bx-calendar-event'></i><div class="stat-info"><h4 id="stat-workshops">0</h4><span>Workshop Reg.</span></div></div>
+                    <div class="stat-card"><i class='bx bx-car'></i><div class="stat-info"><h4 id="stat-private-vehicles">0</h4><span>Parking Spaces</span></div></div>
                 </div>
 
                 <!-- Dashboard Tabs -->
@@ -840,6 +857,10 @@
                         <div class="dash-analysis-card">
                             <h4><i class='bx bx-world'></i> Countries Represented</h4>
                             <div id="dash-countries-breakdown"></div>
+                        </div>
+                        <div class="dash-analysis-card">
+                            <h4><i class='bx bx-car'></i> Transportation / Parking</h4>
+                            <div id="dash-transport-breakdown"></div>
                         </div>
                     </div>
                     <div class="dash-analysis-grid" style="margin-top:1rem;">
@@ -1077,7 +1098,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=96"></script>
+    <script src="app.js?v=97"></script>
 </body>
 
 </html>
