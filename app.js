@@ -964,7 +964,7 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
         const stPct   = sess.student_discount_pct  || 0;
         const discPct = tier === 'academic' ? acPct : tier === 'student' ? stPct : 0;
 
-        let feeStr;
+        let feeCells;
         if (hasRgn) {
             const rawFee    = isLocal ? sess.fee_local : (isSAARC ? sess.fee_saarc : sess.fee_nonsaarc);
             const nativeCur = isLocal ? 'LKR' : 'USD';
@@ -978,7 +978,7 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
             }
             const strike = discPct > 0
                 ? `<span style="text-decoration:line-through;opacity:0.4;font-size:0.78rem;margin-right:4px;">${dispCur} ${dispFeeOrig.toLocaleString('en-US')}</span>` : '';
-            feeStr = `${strike}<span style="color:${discPct > 0 ? '#4ade80' : 'var(--accent)'};">${dispCur} ${dispFee.toLocaleString('en-US')}</span>`;
+            feeCells = `<td style="text-align:right;padding:6px 0;font-weight:500;white-space:nowrap;">${strike}<span style="color:${discPct > 0 ? '#4ade80' : 'var(--accent)'};">${dispCur} ${dispFee.toLocaleString('en-US')}</span></td>`;
         } else {
             const rawL = sess.fee_local;
             const rawS = sess.fee_saarc;
@@ -986,10 +986,10 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
             const dL   = discPct > 0 ? Math.round(rawL * (1 - discPct / 100)) : rawL;
             const dS   = discPct > 0 ? +((rawS * (1 - discPct / 100)).toFixed(2)) : rawS;
             const dN   = discPct > 0 ? +((rawN * (1 - discPct / 100)).toFixed(2)) : rawN;
-            const usdPart = rawS === rawN
-                ? `USD ${dS.toLocaleString('en-US')}`
-                : `SAARC: USD ${dS.toLocaleString('en-US')} / Intl: USD ${dN.toLocaleString('en-US')}`;
-            feeStr = `LKR ${dL.toLocaleString('en-US')} / ${usdPart}`;
+            feeCells = `
+                <td style="text-align:right;padding:6px 4px;color:var(--accent);font-weight:500;white-space:nowrap;">${dL.toLocaleString('en-US')}</td>
+                <td style="text-align:right;padding:6px 4px;color:var(--text-light);font-weight:500;white-space:nowrap;">${dS.toLocaleString('en-US')}</td>
+                <td style="text-align:right;padding:6px 4px;color:var(--text-light);font-weight:500;white-space:nowrap;">${dN.toLocaleString('en-US')}</td>`;
         }
         const tierBadge = discPct > 0
             ? `<span style="font-size:0.7rem;background:rgba(74,222,128,0.15);color:#4ade80;border-radius:3px;padding:1px 5px;margin-left:6px;">${discPct}% off</span>` : '';
@@ -998,21 +998,26 @@ function _previewPreconf(isLocal, isSAARC, hasRgn, fxRate, dispCur) {
 
         rows += `<tr style="border-top:1px solid rgba(197,215,58,0.12);">
             <td style="padding:6px 8px 6px 0;color:var(--text-light);">${sess.name}${tierBadge}${noDiscNote}</td>
-            <td style="text-align:right;padding:6px 0;font-weight:500;white-space:nowrap;">${feeStr}</td>
+            ${feeCells}
         </tr>`;
     });
 
-    const note = !hasRgn
-        ? `<tr><td colspan="2" style="padding:5px 0 0;font-size:0.73rem;color:var(--text-muted);">Fees shown as Local (LKR) / SAARC (USD) / International (USD). Select your region above for exact pricing.</td></tr>`
-        : '';
+    const heading = hasRgn
+        ? `Session Fees (${dispCur})`
+        : 'Fee Reference — select Attendee Region above for personalised pricing';
+    const tableHead = hasRgn
+        ? `<tr><th style="text-align:left;padding:3px 8px 5px 0;color:var(--text-muted);font-weight:500;">Workshop</th><th style="text-align:right;padding:3px 0 5px;color:var(--text-muted);font-weight:500;">${dispCur}</th></tr>`
+        : `<tr><th style="text-align:left;padding:3px 8px 5px 0;color:var(--text-muted);font-weight:500;">Workshop</th><th style="text-align:right;padding:3px 4px 5px;color:var(--text-muted);font-weight:500;">Local (LKR)</th><th style="text-align:right;padding:3px 4px 5px;color:var(--text-muted);font-weight:500;">SAARC (USD)</th><th style="text-align:right;padding:3px 4px 5px;color:var(--text-muted);font-weight:500;">Non-SAARC (USD)</th></tr>`;
 
     el.innerHTML = `<div style="margin-bottom:16px;padding:12px 16px;background:rgba(197,215,58,0.04);border:1px solid rgba(197,215,58,0.18);border-radius:8px;">
         <div style="font-size:0.74rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
-            <i class='bx bx-tag-alt' style="margin-right:4px;vertical-align:middle;"></i>Session Fees${hasRgn ? ' (' + dispCur + ')' : ''}
+            <i class='bx bx-tag-alt' style="margin-right:4px;vertical-align:middle;"></i>${heading}
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
-            <tbody>${rows}${note}</tbody>
-        </table>
+        <div style="overflow-x:auto;">
+            <table style="width:100%;min-width:${hasRgn ? '420px' : '620px'};border-collapse:collapse;font-size:0.82rem;">
+                <thead>${tableHead}</thead><tbody>${rows}</tbody>
+            </table>
+        </div>
     </div>`;
 }
 function updateInaugurationLabel(isLocal, hasRgn) {
