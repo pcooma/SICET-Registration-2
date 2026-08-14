@@ -1164,20 +1164,24 @@ function calculateTotalFee() {
             }
         }
 
-        // APC (always USD)
-        document.getElementById('dynamic-papers-container').querySelectorAll('.apc-toggle').forEach((toggle, i) => {
-            if (toggle.checked) {
-                const sel = document.getElementById(`journal_${i + 1}`);
-                if (sel && sel.value) {
-                    const option = sel.options[sel.selectedIndex];
-                    const notApplicable = option.dataset.apcNotApplicable === 'true';
-                    const fee = notApplicable ? 0 : (parseFloat(option.dataset.fee) || 0);
-                    const disp = toDisplay(fee, 'USD');
-                    displayTotal += disp;
-                    br(); breakdownText += `<span>+ P${i + 1} APC (${sel.value}):</span><span>${notApplicable ? 'Not applicable' : disp + ' ' + displayCur}</span>`;
+        // APC is available only to paper-holding categories. Guard the calculation
+        // as well as the UI so stale DOM state cannot affect a non-author preview.
+        const pricingCategory = (appSettings.categories || []).find(c => c.label === category);
+        if (pricingCategory && !pricingCategory.no_papers && !pricingCategory.is_workshop_only) {
+            document.getElementById('dynamic-papers-container').querySelectorAll('.apc-toggle').forEach((toggle, i) => {
+                if (toggle.checked) {
+                    const sel = document.getElementById(`journal_${i + 1}`);
+                    if (sel && sel.value) {
+                        const option = sel.options[sel.selectedIndex];
+                        const notApplicable = option.dataset.apcNotApplicable === 'true';
+                        const fee = notApplicable ? 0 : (parseFloat(option.dataset.fee) || 0);
+                        const disp = toDisplay(fee, 'USD');
+                        displayTotal += disp;
+                        br(); breakdownText += `<span>+ P${i + 1} APC (${sel.value}):</span><span>${notApplicable ? 'Not applicable' : disp + ' ' + displayCur}</span>`;
+                    }
                 }
-            }
-        });
+            });
+        }
 
     }
 
@@ -1341,6 +1345,9 @@ function collectFormData(refId) {
     if (categoryDef?.no_papers || categoryDef?.is_workshop_only) {
         dataObj['Number_of_Papers'] = '0';
         dataObj['CMT_Changes'] = '';
+        Object.keys(dataObj).forEach(key => {
+            if (/^Paper_\d+_/.test(key)) delete dataObj[key];
+        });
     }
     if (!categoryDef?.is_student) {
         delete dataObj['Include_Inauguration'];

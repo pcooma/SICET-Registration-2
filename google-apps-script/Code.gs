@@ -719,14 +719,16 @@ function calculateAuthoritativeFee(data, settings, category, selectedSessions) {
       const discountedCount = discountPct > 0 ? (maxDiscounted > 0 ? Math.min(paperCount - 1, maxDiscounted) : paperCount - 1) : 0;
       total += baseFee + discountedCount * baseFee * (1 - discountPct / 100) + (paperCount - 1 - discountedCount) * baseFee;
     }
-    (settings.journals || []).forEach(function(journal) {
-      for (let i = 1; i <= paperCount; i++) {
-        const include = data['Paper_' + i + '_Include_APC'];
-        if (include && String(data['Paper_' + i + '_Journal'] || '') === journal.name && journal.apc_not_applicable !== true) {
-          total += convert(Number(journal.fee) || 0, 'USD');
+    if (!category.no_papers) {
+      (settings.journals || []).forEach(function(journal) {
+        for (let i = 1; i <= paperCount; i++) {
+          const include = data['Paper_' + i + '_Include_APC'];
+          if (include && String(data['Paper_' + i + '_Journal'] || '') === journal.name && journal.apc_not_applicable !== true) {
+            total += convert(Number(journal.fee) || 0, 'USD');
+          }
         }
-      }
-    });
+      });
+    }
     if (data.Include_Inauguration) total += Number(isLocal ? settings.inauguration_fee : settings.inauguration_fee_usd) || 0;
   }
   if (hasRegistrationType(registrationTypes, 'Pre-Conference Workshops')) {
@@ -795,6 +797,9 @@ function normalizeConditionalRegistration(data, category) {
     data.Number_of_Papers = '0';
     data.Paper_Details = '';
     data.CMT_Changes = '';
+    Object.keys(data).forEach(function(key) {
+      if (/^Paper_\d+_/.test(key)) delete data[key];
+    });
   }
   if (!category || !category.is_student) {
     data.Include_Inauguration = '';

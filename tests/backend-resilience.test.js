@@ -281,6 +281,25 @@ const validAwardRegistration = sandbox.validateRegistration(Object.assign({}, ba
 }), emptyFolder);
 assert.equal(validAwardRegistration.valid, true, 'positive whole-number award participant count must be accepted');
 
+const nonAuthorCategory = { no_papers: true, is_student: false, is_workshop_only: false,
+  fee_local: 12500, fee_saarc: 40, fee_nonsaarc: 70 };
+const apcSettings = {
+  usd_to_lkr: 320, discounts: {}, journals: [{ name: 'Injected Journal', fee: 500 }],
+  award_fee: 0, excursion_fees: {}
+};
+const tamperedNonAuthor = {
+  Registration_Type: 'Main', Attendee_Region: 'Local', Number_of_Papers: '1',
+  Paper_1_Include_APC: 'on', Paper_1_Journal: 'Injected Journal'
+};
+const nonAuthorFee = sandbox.calculateAuthoritativeFee(tamperedNonAuthor, apcSettings, nonAuthorCategory, []);
+assert.equal(nonAuthorFee.total, 12500, 'non-author total must ignore stale or injected APC fields');
+const normalizedTamperedNonAuthor = sandbox.normalizeConditionalRegistration(
+  Object.assign({}, tamperedNonAuthor), nonAuthorCategory);
+assert.equal(normalizedTamperedNonAuthor.Paper_1_Include_APC, undefined,
+  'non-author normalization must remove stale paper and APC fields');
+assert.equal(normalizedTamperedNonAuthor.Paper_1_Journal, undefined,
+  'non-author normalization must remove stale journal fields');
+
 const genericMimePdf = {
   name: 'bank-slip.pdf',
   mimeType: 'application/octet-stream',
