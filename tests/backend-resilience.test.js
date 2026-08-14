@@ -10,7 +10,8 @@ const sandbox = {
   MimeType: { PLAIN_TEXT: 'text/plain' },
   Utilities: {
     getUuid: () => 'test-version',
-    base64Decode: value => Array.from(Buffer.from(value, 'base64'))
+    base64Decode: value => Array.from(Buffer.from(value, 'base64')),
+    formatDate: () => '2026-08-14'
   },
   DriveApp: {
     getFileById(id) {
@@ -181,6 +182,42 @@ sandbox.validateAuthorPaperDetails({ Number_of_Papers: '0' }, { no_papers: true,
 assert.equal(participantPaperErrors.length, 0, 'non-author participant categories must not require paper details');
 assert.equal(sandbox.uploadExtension('application/pdf'), '.pdf', 'canonical payment proof names must retain a safe extension');
 assert.equal(sandbox.uploadExtension('image/jpeg'), '.jpg', 'JPEG proofs must receive the canonical extension');
+assert.equal(
+  sandbox.buildPaymentProofName({
+    Invoice_ID: 'SICET2026-ABC123',
+    Attendee_Category_ID: 'author',
+    Attendee_Category: 'General Author',
+    Registration_Type: 'Main + Award + Pre-Conference Workshops',
+    Number_of_Papers: '2',
+    Paper_1_ID: 'CMT 195',
+    Paper_2_ID: 'CMT/220'
+  }, 0, 'application/pdf', new Date('2026-08-14T00:00:00Z')),
+  'payment-proof_General-Author_Main-Conference_Excellence-Award_PreConf-Workshops_Papers-CMT-195-CMT-220_2026-08-14_SICET2026-ABC123_01.pdf',
+  'author proof names must trace category, every product, paper IDs, date, reference, and sequence'
+);
+assert.equal(
+  sandbox.buildPaymentProofName({
+    Invoice_ID: 'SICET2026-NONA01',
+    Attendee_Category: 'Student Participant (Non-Author)',
+    Registration_Type: 'Excursion',
+    Number_of_Papers: '0'
+  }, 1, 'image/png', new Date('2026-08-14T00:00:00Z')),
+  'payment-proof_Student-Participant-Non-Author_Excursion_2026-08-14_SICET2026-NONA01_02.png',
+  'non-author proof names must omit misleading paper identifiers'
+);
+const authorWithoutPaperName = sandbox.buildPaymentProofName({
+  Invoice_ID: 'SICET2026-AWARD01', Attendee_Category_ID: 'author', Attendee_Category: 'General Author',
+  Registration_Type: 'Award', Number_of_Papers: '0'
+}, 0, 'image/jpeg', new Date('2026-08-14T00:00:00Z'));
+assert.ok(authorWithoutPaperName.includes('_Paper-ID-Unavailable_'), 'author categories without a paper-bearing product must remain visibly traceable');
+const allProductsName = sandbox.buildPaymentProofName({
+  Invoice_ID: 'SICET2026-ALL001', Attendee_Category: 'Student Author', Attendee_Category_ID: 'student',
+  Registration_Type: 'Main + Award + Excursion + Pre-Conference Workshops + Conference Workshops',
+  Number_of_Papers: '10',
+  ...Object.fromEntries(Array.from({length:10}, (_, index) => ['Paper_' + (index + 1) + '_ID', 'CMT-' + (index + 1)]))
+}, 2, 'application/pdf', new Date('2026-08-14T00:00:00Z'));
+assert.ok(allProductsName.length < 255, 'combined-product and ten-paper filenames must stay inside Drive filename limits');
+assert.ok(allProductsName.endsWith('_03.pdf'), 'split-payment sequence and safe extension must be retained');
 
 const serverPrice = sandbox.calculateAuthoritativeFee({
   Registration_Type: 'Main + Award', Attendee_Region: 'Local', Number_of_Papers: '2', Participant_Count: '1'

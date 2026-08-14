@@ -260,10 +260,10 @@ function handleSubmitRegistration(data) {
     const validProofs = proofs.filter(p => p && p.data);
     if (validProofs.length > 0) {
       validProofs.forEach(function(proof, index) {
-        proof.name = data.Invoice_ID + '_' + (index + 1) + uploadExtension(proof.mimeType);
+        proof.name = buildPaymentProofName(data, index, proof.mimeType);
       });
       replaceUploadedFilesSafely(userFolder, 'payment_proof_', validProofs, function(index, total) {
-        return 'payment_proof_';
+        return '';
       });
     }
     if (validProofs.length > 0) data.Payment_Proof_Base64 = '(uploaded — see folder)';
@@ -916,6 +916,52 @@ function uploadExtension(mimeType) {
     'image/png': '.png',
     'image/webp': '.webp'
   }[mimeType] || '';
+}
+
+function safeFilenameToken(value, maxLength) {
+  const token = String(value || '')
+    .trim()
+    .replace(/&/g, ' and ')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'Unknown';
+  return token.substring(0, maxLength || 40).replace(/-+$/g, '');
+}
+
+function buildPaymentProofName(data, index, mimeType, dateValue) {
+  const productMap = {
+    'Main': 'Main-Conference',
+    'Award': 'Excellence-Award',
+    'Excursion': 'Excursion',
+    'Pre-Conference Workshops': 'PreConf-Workshops',
+    'Conference Workshops': 'Conference-Workshops'
+  };
+  const products = String(data.Registration_Type || '')
+    .split('+')
+    .map(function(value) { return productMap[value.trim()] || safeFilenameToken(value, 30); })
+    .filter(Boolean)
+    .join('_') || 'Registration';
+  const productToken = products.substring(0, 90).replace(/_+$/g, '');
+  const category = safeFilenameToken(data.Attendee_Category || data.Attendee_Category_ID || 'Unknown-Category', 36);
+  const categoryId = String(data.Attendee_Category_ID || '').toLowerCase();
+  const categoryLabel = String(data.Attendee_Category || '').toLowerCase();
+  const isAuthor = categoryId === 'author' || categoryId === 'student' ||
+    categoryLabel === 'general author' || categoryLabel === 'student author';
+  const paperIds = [];
+  const paperCount = Math.max(0, Math.min(10, Number(data.Number_of_Papers) || 0));
+  for (let paperIndex = 1; paperIndex <= paperCount; paperIndex++) {
+    const paperId = String(data['Paper_' + paperIndex + '_ID'] || '').trim();
+    if (paperId) paperIds.push(safeFilenameToken(paperId, 18));
+  }
+  const paperToken = isAuthor
+    ? (paperIds.length ? 'Papers-' + safeFilenameToken(paperIds.join('-'), 60) : 'Paper-ID-Unavailable')
+    : '';
+  const dateToken = Utilities.formatDate(dateValue || new Date(), 'Asia/Colombo', 'yyyy-MM-dd');
+  const reference = safeFilenameToken(data.Invoice_ID || 'No-Reference', 32);
+  const sequence = String(index + 1).padStart(2, '0');
+  return [
+    'payment-proof', category, productToken, paperToken,
+    dateToken, reference, sequence
+  ].filter(Boolean).join('_') + uploadExtension(mimeType);
 }
 
 function replaceUploadedFilesSafely(folder, existingPrefix, uploads, prefixForIndex) {
