@@ -126,11 +126,15 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="organization">Organization / Company <span class="required">*</span></label>
-                        <input type="text" id="organization" name="Organization"
-                            placeholder="Enter your organization name" required>
-                    </div>
+                        <div class="form-group">
+                            <label for="organization">Organization / Company <span class="required">*</span></label>
+                            <input type="text" id="organization" name="Organization"
+                                placeholder="Enter your organization name" required>
+                        </div>
+                        <div class="highlight-box" style="margin-bottom:20px;padding:12px 16px;">
+                            <strong style="color:var(--accent);">Authors:</strong>
+                            <span style="color:var(--text-muted);">Enter the contact information of the presenting author above. Register other authors separately as participants if they will attend.</span>
+                        </div>
 
                     <!-- 1. Identity Phase -->
                     <div class="form-group highlight-box" style="margin-bottom: 25px;">
@@ -227,6 +231,12 @@
                             <label for="address">Postal / Mailing Address</label>
                             <textarea id="address" name="Address" rows="2"
                                 placeholder="Street, City, Country, Postal Code"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="cmtChanges">Changes from CMT Information</label>
+                            <textarea id="cmtChanges" name="CMT_Changes" rows="3"
+                                placeholder="E.g. presenting author changed from A. Silva to B. Perera. Leave blank if there are no changes."></textarea>
+                            <small class="helper-text">Mention presenting-author changes or any other difference from the information submitted in CMT.</small>
                         </div>
                         <div class="form-group row">
                             <div class="input-field col">
@@ -565,7 +575,7 @@
                             <div class="input-field col">
                                 <label for="paymentProof">Upload Proof of Payment <span class="required">*</span></label>
                                 <input type="file" id="paymentProof" name="Payment_Proof" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" class="file-input" multiple>
-                                <small class="helper-text">PDF, JPEG, PNG, or WebP — max 5MB each · up to 3 files (for split payments)</small>
+                                <small class="helper-text">PDF, JPEG, PNG, or WebP — max 5MB each · up to 3 files. No renaming is required; the system stores each proof using your registration Reference ID.</small>
                                 <div id="payment-proof-preview" class="proof-preview-list"></div>
                             </div>
                             <div class="input-field col">
@@ -580,6 +590,9 @@
                                 <span>Submit Registration</span>
                                 <i class='bx bx-right-arrow-alt'></i>
                             </button>
+                            <p class="helper-text" style="text-align:center;margin-top:10px;color:var(--text-muted);">
+                                After submission, the SICET team will review your registration and send a confirmation email within 1–2 business days.
+                            </p>
                             <p id="submit-payment-note" class="helper-text" style="text-align:center;margin-top:10px;color:#e0a000;">
                                 <i class='bx bx-error-circle'></i> Upload your proof of payment above to enable submission.
                             </p>
@@ -958,10 +971,10 @@
                         <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px;">For a journal that does not require an Article Processing Charge, check <strong>APC not applicable</strong>. Registrants will see that status clearly and no APC amount will be added to previews or invoices.</p>
                         <div class="settings-group">
                             <h4>APC Fee Collection Status</h4>
-                            <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:8px;">Enable once authors have received their Paper IDs and you are ready to collect APC fees. Until enabled, the Paper ID field is hidden from registrants. <strong style="color:#e8b84b;">Note:</strong> APC for <em>Advances in Science and Technology</em> is pending confirmation — update the fee before enabling.</p>
+                            <p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:8px;">Enable only when you are ready to collect APC fees. Paper ID and title remain mandatory for author registrations regardless of this setting. <strong style="color:#e8b84b;">Note:</strong> APC for <em>Advances in Science and Technology</em> is pending confirmation — update the fee before enabling.</p>
                             <div class="form-checkbox">
                                 <input type="checkbox" id="setting_apc_active">
-                                <label for="setting_apc_active" style="font-weight:500;">Enable APC fee collection (makes Paper ID field visible to registrants)</label>
+                                <label for="setting_apc_active" style="font-weight:500;">Enable APC fee collection and journal selection</label>
                             </div>
                         </div>
                         <div class="journals-list" id="journals-list">
@@ -1064,7 +1077,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=92"></script>
+    <script src="app.js?v=93"></script>
 </body>
 
 </html>

@@ -66,6 +66,8 @@ assert.deepEqual(originalHeaders, ['Submission_Date', 'Invoice_ID', 'Full_Name']
 assert.ok(appended.includes('Settings_Version'), 'new audit columns must be appended');
 assert.ok(appended.includes('Conference_Workshops'), 'conference workshop names must use an append-only column');
 assert.ok(appended.includes('Conference_Workshop_IDs'), 'conference workshop IDs must use an append-only column');
+assert.ok(appended.includes('Paper_Details'), 'paper ID/title summary must use an append-only column');
+assert.ok(appended.includes('CMT_Changes'), 'CMT differences must use an append-only column');
 assert.equal(migration.finalColumnCount, originalHeaders.length + appended.length);
 
 const historicalSnapshot = JSON.stringify({ category: validSettings.categories[0], settings_version: 'v1' });
@@ -142,6 +144,7 @@ const normalizedInactiveSections = sandbox.normalizeConditionalRegistration({
 }, { no_papers: false, is_student: true, is_workshop_only: false });
 assert.equal(normalizedInactiveSections.Number_of_Papers, '0', 'inactive main conference must discard paper count');
 assert.equal('Paper_1_Title' in normalizedInactiveSections, false, 'inactive main conference must discard paper details');
+assert.equal(normalizedInactiveSections.CMT_Changes, '', 'inactive main conference must discard CMT changes');
 assert.equal(normalizedInactiveSections.Include_Inauguration, '', 'inactive main conference must discard inauguration opt-in');
 assert.equal(normalizedInactiveSections.Participant_Count, '0', 'inactive award must discard participant count');
 assert.equal(normalizedInactiveSections.Participant_Names, '', 'inactive award must discard participant details');
@@ -164,6 +167,18 @@ sandbox.validateEventSelections('disabled', [{ id: 'disabled', active: false }],
 assert.equal(disabledErrors.length, 1, 'new registrations must reject disabled workshop IDs');
 assert.equal(sandbox.hasRegistrationType('Pre-Conference Workshops', 'Conference Workshops'), false, 'pre-conference must not be misclassified as conference-day workshops');
 assert.equal(sandbox.hasRegistrationType('Main + Conference Workshops', 'Conference Workshops'), true, 'exact combined product tokens must be recognized');
+
+const missingPaperErrors = [];
+sandbox.validateAuthorPaperDetails({ Number_of_Papers: '2', Paper_1_ID: '101', Paper_1_Title: 'First' }, { no_papers: false, is_workshop_only: false }, missingPaperErrors);
+assert.deepEqual(Array.from(missingPaperErrors), ['Paper 2 ID is required.', 'Paper 2 title is required.'], 'every author paper must include both ID and title');
+const completePaperErrors = [];
+sandbox.validateAuthorPaperDetails({ Number_of_Papers: '1', Paper_1_ID: '101', Paper_1_Title: 'Complete paper' }, { no_papers: false, is_workshop_only: false }, completePaperErrors);
+assert.equal(completePaperErrors.length, 0, 'complete author paper details must pass validation');
+const participantPaperErrors = [];
+sandbox.validateAuthorPaperDetails({ Number_of_Papers: '0' }, { no_papers: true, is_workshop_only: false }, participantPaperErrors);
+assert.equal(participantPaperErrors.length, 0, 'non-author participant categories must not require paper details');
+assert.equal(sandbox.uploadExtension('application/pdf'), '.pdf', 'canonical payment proof names must retain a safe extension');
+assert.equal(sandbox.uploadExtension('image/jpeg'), '.jpg', 'JPEG proofs must receive the canonical extension');
 
 const serverPrice = sandbox.calculateAuthoritativeFee({
   Registration_Type: 'Main + Award', Attendee_Region: 'Local', Number_of_Papers: '2', Participant_Count: '1'

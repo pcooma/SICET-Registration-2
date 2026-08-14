@@ -31,7 +31,7 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const ALLOWED_UPLOAD_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 const SETTINGS_FILE_NAME = 'sicet2026_settings.json';
 const SETTINGS_HISTORY_FOLDER_NAME = 'Settings History';
-const RECORD_SCHEMA_VERSION = 3;
+const RECORD_SCHEMA_VERSION = 4;
 const MASTER_HEADERS = [
   'Submission_Date', 'Invoice_ID', 'Status',
   'Title', 'Full_Name', 'Email', 'Phone',
@@ -50,7 +50,8 @@ const MASTER_HEADERS = [
   // Append-only evolution fields. Never rename/remove older columns.
   'Record_Schema_Version', 'Settings_Version', 'Attendee_Category_ID',
   'PreConf_Session_IDs', 'Pricing_Snapshot',
-  'Conference_Workshops', 'Conference_Workshop_IDs'
+  'Conference_Workshops', 'Conference_Workshop_IDs',
+  'Paper_Details', 'CMT_Changes'
 ];
 
 /**
@@ -258,8 +259,11 @@ function handleSubmitRegistration(data) {
       : [data.Payment_Proof_Base64];
     const validProofs = proofs.filter(p => p && p.data);
     if (validProofs.length > 0) {
+      validProofs.forEach(function(proof, index) {
+        proof.name = data.Invoice_ID + '_' + (index + 1) + uploadExtension(proof.mimeType);
+      });
       replaceUploadedFilesSafely(userFolder, 'payment_proof_', validProofs, function(index, total) {
-        return total > 1 ? 'payment_proof_' + (index + 1) + '_' : 'payment_proof_';
+        return 'payment_proof_';
       });
     }
     if (validProofs.length > 0) data.Payment_Proof_Base64 = '(uploaded — see folder)';
@@ -489,9 +493,17 @@ function validateRegistration(input, mainFolder) {
   let todayColombo = '';
   const hasPreConferenceSelection = hasRegistrationType(registrationTypes, 'Pre-Conference Workshops') && String(data.PreConf_Session_IDs || '').trim();
   const hasConferenceSelection = hasRegistrationType(registrationTypes, 'Conference Workshops') && String(data.Conference_Workshop_IDs || '').trim();
-  if (hasPreConferenceSelection || hasConferenceSelection) {
+  const hasMainRegistration = hasRegistrationType(registrationTypes, 'Main');
+  if (hasMainRegistration || hasPreConferenceSelection || hasConferenceSelection) {
     settings = readCurrentSettings(mainFolder);
     todayColombo = Utilities.formatDate(new Date(), 'Asia/Colombo', 'yyyy-MM-dd');
+  }
+  if (hasMainRegistration) {
+    const categories = settings.categories || [];
+    const category = categories.find(function(item) {
+      return (data.Attendee_Category_ID && item.id === data.Attendee_Category_ID) || item.label === data.Attendee_Category;
+    });
+    validateAuthorPaperDetails(data, category, errors);
   }
   const existing = data.Invoice_ID ? findFolderByRef(mainFolder, data.Invoice_ID) : null;
   let saved = null;
@@ -537,6 +549,19 @@ function validateRegistration(input, mainFolder) {
   proofs.forEach(function(p, i) { validateUpload(p, 'Payment proof ' + (i + 1), errors); });
   data.Submission_Date = new Date().toISOString();
   return { valid: errors.length === 0, errors: errors, data: data };
+}
+
+function validateAuthorPaperDetails(data, category, errors) {
+  if (!category || category.no_papers || category.is_workshop_only) return;
+  const paperCount = Number(data.Number_of_Papers);
+  if (!isFinite(paperCount) || Math.floor(paperCount) !== paperCount || paperCount < 1 || paperCount > 10) {
+    errors.push('Author registrations require a valid number of papers between 1 and 10.');
+    return;
+  }
+  for (let paperIndex = 1; paperIndex <= paperCount; paperIndex++) {
+    if (!String(data['Paper_' + paperIndex + '_ID'] || '').trim()) errors.push('Paper ' + paperIndex + ' ID is required.');
+    if (!String(data['Paper_' + paperIndex + '_Title'] || '').trim()) errors.push('Paper ' + paperIndex + ' title is required.');
+  }
 }
 
 function validateEventSelections(requestedValue, configuredItems, savedValue, today, label, errors) {
@@ -634,6 +659,16 @@ function attachPricingSnapshot(data, mainFolder) {
   data.Attendee_Category_ID = category.id;
   data.PreConf_Session_IDs = selectedSessions.map(function(session) { return session.id; }).join(', ');
   data.PreConf_Sessions = selectedSessions.map(function(session) { return session.name; }).join(', ');
+  if (hasRegistrationType(String(data.Registration_Type || ''), 'Main') && !category.no_papers && !category.is_workshop_only) {
+    const paperCount = Math.max(1, Math.min(10, Number(data.Number_of_Papers) || 1));
+    const paperDetails = [];
+    for (let paperIndex = 1; paperIndex <= paperCount; paperIndex++) {
+      paperDetails.push('[' + String(data['Paper_' + paperIndex + '_ID'] || '').trim() + '] ' + String(data['Paper_' + paperIndex + '_Title'] || '').trim());
+    }
+    data.Paper_Details = paperDetails.join(' | ');
+  } else {
+    data.Paper_Details = '';
+  }
   const savedRecord = existingFolder ? getRegistrationByRef(data.Invoice_ID) : null;
   data.Conference_Workshop_IDs = selectedConferenceWorkshops.length
     ? selectedConferenceWorkshops.map(function(workshop) { return workshop.id; }).join(', ')
@@ -723,6 +758,8 @@ function normalizeConditionalRegistration(data, category) {
 
   if (!hasMain) {
     data.Number_of_Papers = '0';
+    data.Paper_Details = '';
+    data.CMT_Changes = '';
     data.Include_Inauguration = '';
     Object.keys(data).forEach(function(key) {
       if (/^Paper_\d+_/.test(key)) delete data[key];
@@ -854,7 +891,9 @@ function buildRow(headers, data, folderUrl) {
     PreConf_Session_IDs:   data.PreConf_Session_IDs    || '',
     Pricing_Snapshot:      data.Pricing_Snapshot       || '',
     Conference_Workshops: data.Conference_Workshops || '',
-    Conference_Workshop_IDs: data.Conference_Workshop_IDs || ''
+    Conference_Workshop_IDs: data.Conference_Workshop_IDs || '',
+    Paper_Details:        data.Paper_Details          || '',
+    CMT_Changes:          data.CMT_Changes            || ''
   };
   return headers.map(h => map[h] !== undefined ? map[h] : (data[h] || ''));
 }
@@ -866,6 +905,15 @@ function saveFileToFolder(folder, prefix, fileObj) {
     prefix + (fileObj.name || 'file')
   );
   return folder.createFile(blob);
+}
+
+function uploadExtension(mimeType) {
+  return {
+    'application/pdf': '.pdf',
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp'
+  }[mimeType] || '';
 }
 
 function replaceUploadedFilesSafely(folder, existingPrefix, uploads, prefixForIndex) {

@@ -555,9 +555,9 @@ function generatePaperBlocks(count) {
         block.innerHTML = `
             <h4 class="mb-3" style="font-size: 1.1rem; color: var(--accent);">Paper ${i} Details</h4>
             <div class="form-group row">
-                <div class="input-field col${apcActive ? '' : ' hidden'}">
+                <div class="input-field col">
                     <label for="paperId_${i}">Paper ID <span class="required">*</span></label>
-                    <input type="text" id="paperId_${i}" name="Paper_${i}_ID" placeholder="E.g. 195" ${apcActive ? 'required' : ''} oninput="calculateTotalFee()">
+                    <input type="text" id="paperId_${i}" name="Paper_${i}_ID" placeholder="E.g. 195" required oninput="calculateTotalFee()">
                 </div>
                 <div class="input-field col">
                     <label for="paperTitle_${i}">Title of the Paper <span class="required">*</span></label>
@@ -1268,7 +1268,7 @@ function collectFormData(refId) {
     dataObj['Registration_Type'] = typesArr.join(' + ') || 'None';
     const selectedCategory = document.getElementById('attendeeCategory')?.selectedOptions?.[0];
     dataObj['Attendee_Category_ID'] = selectedCategory?.dataset?.categoryId || '';
-    dataObj['Record_Schema_Version'] = 3;
+    dataObj['Record_Schema_Version'] = 4;
     dataObj['Settings_Version'] = appSettings?._meta?.version || 'legacy-unversioned';
 
     // Serialize selected pre-conference session names for the admin sheet
@@ -1686,7 +1686,7 @@ async function handleFormSubmit(e) {
     waDataSource = null;
     refreshWaContextBox();
 
-    showToast(`Registration complete! Reference: ${refId}`, 'success');
+    showToast(`Registration received! Reference: ${refId}. A confirmation email will be sent within 1–2 business days.`, 'success');
 }
 
 // ---- PROFORMA INVOICE (jsPDF) LOGIC ----
@@ -2730,6 +2730,8 @@ function openRecordModal(sub) {
             title: 'Academic / Papers',
             fields: [
                 ['Number of Papers',    sub.Number_of_Papers],
+                ['Paper Details',       sub.Paper_Details],
+                ['Changes from CMT',    sub.CMT_Changes],
                 ['Pre-Conf Sessions',   sub.PreConf_Sessions],
                 ['Conference Workshops', sub.Conference_Workshops],
                 ['Food Preference',     sub.Food_Preference],
