@@ -3962,6 +3962,7 @@ const WA_CONTACTS = {
     preconf: { name: 'Dr. Nandika Miguntanna',      number: '94718548966', role: 'Pre-Conference Workshops Chair' },
     award:   { name: 'Ms. Angel Shanali Oshaji',    number: '94760255850', role: 'Excellence Award Coordinator' },
     payment: { name: 'Dr. Gayashika Fernando',      number: '94777402892', role: 'Registration Chair' },
+    technical: { name: 'Pramuditha Coomasaru',      number: '94777728081', role: 'Technical Support — Registration System' },
     general: { name: 'Mr. Sudara Withana',          number: '94774014463', role: 'Conference Co-Secretary' },
     other:   { name: 'Dr. Gayashika Fernando',      number: '94777402892', role: 'Registration Chair' }
 };
@@ -4225,8 +4226,8 @@ function buildWaMessage() {
         if (ctx.email) lines.push(`Email  : ${ctx.email}`);
         if (ctx.refId) lines.push(`Ref ID : ${ctx.refId}`);
 
-    } else if (type === 'general') {
-        // General Inquiry: ref ID if available, email if available
+    } else if (type === 'general' || type === 'technical') {
+        // General/technical queries: include identifiers when available for tracing
         if (ctx.refId) lines.push(`Ref ID : ${ctx.refId}`);
         if (ctx.email) lines.push(`Email  : ${ctx.email}`);
     }
