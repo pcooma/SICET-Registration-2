@@ -668,27 +668,16 @@ function updateExcursionTicketVisibility() {
         }
     }
 
-    updateTransportationVisibility();
-
     calculateTotalFee();
 }
 
 function updateTransportationVisibility() {
-    const isLocal = document.getElementById('attendeeRegion')?.value === 'Local';
-    const section = document.getElementById('local-transportation-section');
     const mode = document.getElementById('transportMode');
     const vehicleGroup = document.getElementById('vehicle-number-group');
     const vehicle = document.getElementById('vehicleNumber');
-    if (!section || !mode || !vehicleGroup || !vehicle) return;
+    if (!mode || !vehicleGroup || !vehicle) return;
 
-    section.classList.toggle('hidden', !isLocal);
-    mode.required = isLocal;
-    mode.disabled = !isLocal;
-    if (!isLocal) {
-        mode.value = '';
-        vehicle.value = '';
-    }
-    const needsVehicle = isLocal && mode.value === 'Private Vehicle';
+    const needsVehicle = mode.value === 'Private Vehicle - Parking Required';
     vehicleGroup.classList.toggle('hidden', !needsVehicle);
     vehicle.required = needsVehicle;
     vehicle.disabled = !needsVehicle;
@@ -1104,10 +1093,11 @@ function calculateTotalFee() {
     const isAward     = document.getElementById('toggleAward').checked;
     const isExcursion = document.getElementById('toggleExcursion').checked;
     const isPreConf   = document.getElementById('togglePreConf')?.checked || false;
-    const isConferenceWorkshops = document.getElementById('toggleConferenceWorkshops')?.checked || false;
+    const hasPaymentProduct = isMain || isAward || isExcursion || isPreConf;
 
     const invWrapper = document.getElementById('invoice-download-wrapper');
-    if (!isMain && !isAward && !isExcursion && !isPreConf && !isConferenceWorkshops) {
+    document.getElementById('step1-section')?.classList.toggle('hidden', !hasPaymentProduct);
+    if (!hasPaymentProduct) {
         priceBox.classList.add('hidden');
         if (invWrapper) invWrapper.classList.add('hidden');
         priceCurrency.textContent = 'LKR';
@@ -1381,8 +1371,6 @@ function collectFormData(refId) {
         dataObj['Excursion_Foreign_Count'] = '0';
     } else if (dataObj.Attendee_Region) {
         dataObj['Excursion_Local_Count'] = '0';
-        dataObj['Transport_Mode'] = '';
-        dataObj['Vehicle_Number'] = '';
     }
     if (studentIdPreviouslyUploaded) dataObj['Student_ID_Base64'] = '(uploaded — see folder)';
     if (workshopIdPreviouslyUploaded) dataObj['Workshop_ID_Base64'] = '(uploaded — see folder)';
@@ -2455,7 +2443,8 @@ function updateAdminDashboard() {
     const workshopCount = submissions.filter(s => s.Registration_Type && s.Registration_Type.includes('Pre-Conference')).length;
     set('stat-workshops', workshopCount);
     const uniqueVehicleNumbers = new Set(submissions
-        .filter(s => s.Attendee_Region === 'Local' && s.Transport_Mode === 'Private Vehicle')
+        .filter(s => s.Transport_Mode === 'Private Vehicle - Parking Required' ||
+            (s.Transport_Mode === 'Private Vehicle' && String(s.Vehicle_Number || '').trim()))
         .map(s => String(s.Vehicle_Number || '').trim().toUpperCase())
         .filter(Boolean));
     set('stat-private-vehicles', uniqueVehicleNumbers.size);
@@ -2618,9 +2607,8 @@ function renderLogisticsTab() {
 
     // Countries
     set('dash-countries-breakdown', buildBreakdown(submissions, 'Country'));
-    const localTransport = submissions.filter(s => s.Attendee_Region === 'Local');
-    set('dash-transport-breakdown', buildBreakdown(localTransport, s => {
-        if (s.Transport_Mode === 'Private Vehicle') {
+    set('dash-transport-breakdown', buildBreakdown(submissions, s => {
+        if (s.Transport_Mode === 'Private Vehicle - Parking Required' || s.Transport_Mode === 'Private Vehicle') {
             return s.Vehicle_Number ? `Private Vehicle — ${s.Vehicle_Number}` : 'Private Vehicle — number missing';
         }
         return s.Transport_Mode || 'Not supplied (legacy record)';

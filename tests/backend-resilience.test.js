@@ -133,11 +133,11 @@ assert.equal(normalizedNoPapers.Excursion_Local_Count, '0', 'foreign region must
 assert.equal(normalizedNoPapers.Excursion_Foreign_Count, '2');
 
 const normalizedForeignTransport = sandbox.normalizeConditionalRegistration({
-  Registration_Type: 'Main', Attendee_Region: 'SAARC', Transport_Mode: 'Private Vehicle',
-  Vehicle_Number: 'CAB-1234'
+  Registration_Type: 'Main', Attendee_Region: 'SAARC', Transport_Mode: 'Ride-hailing / Taxi',
+  Vehicle_Number: 'STALE-1234'
 }, { no_papers: true, is_student: false, is_workshop_only: false });
-assert.equal(normalizedForeignTransport.Transport_Mode, '', 'foreign participants must not retain local transportation mode');
-assert.equal(normalizedForeignTransport.Vehicle_Number, '', 'foreign participants must not retain vehicle numbers');
+assert.equal(normalizedForeignTransport.Transport_Mode, 'Ride-hailing / Taxi', 'international travel mode must be preserved');
+assert.equal(normalizedForeignTransport.Vehicle_Number, '', 'non-parking transport must not retain vehicle numbers');
 
 const normalizedInactiveSections = sandbox.normalizeConditionalRegistration({
   Registration_Type: 'Pre-Conference Workshops',
@@ -261,13 +261,13 @@ const missingTransport = sandbox.validateRegistration(Object.assign({}, baseRegi
   Registration_Type: 'Award', Transport_Mode: ''
 }), emptyFolder);
 assert.equal(missingTransport.valid, false, 'local registration must include transportation mode');
-assert.ok(Array.from(missingTransport.errors).includes('Select private vehicle or public transport.'));
+assert.ok(Array.from(missingTransport.errors).includes('Select a transportation option.'));
 
 const missingVehicleNumber = sandbox.validateRegistration(Object.assign({}, baseRegistration, {
-  Registration_Type: 'Award', Transport_Mode: 'Private Vehicle', Vehicle_Number: ''
+  Registration_Type: 'Award', Transport_Mode: 'Private Vehicle - Parking Required', Vehicle_Number: ''
 }), emptyFolder);
 assert.equal(missingVehicleNumber.valid, false, 'private vehicle registration must include vehicle number');
-assert.ok(Array.from(missingVehicleNumber.errors).includes('Vehicle registration number is required for private vehicles.'));
+assert.ok(Array.from(missingVehicleNumber.errors).includes('Vehicle registration number is required when on-campus parking is requested.'));
 const emptyWorkshopRegistration = sandbox.validateRegistration(Object.assign({}, baseRegistration, {
   Registration_Type: 'Pre-Conference Workshops',
   PreConf_Session_IDs: '',

@@ -164,21 +164,35 @@
                                 <option value="Workshop Attendee">Workshop Attendee</option>
                             </select>
                         </div>
-                        <div id="local-transportation-section" class="form-group row hidden" style="margin-top:15px;margin-bottom:0;">
-                            <div class="input-field col">
-                                <label for="transportMode">Transportation <span class="required">*</span></label>
-                                <select id="transportMode" name="Transport_Mode">
-                                    <option value="" disabled selected>Select transportation</option>
-                                    <option value="Private Vehicle">Private Vehicle</option>
-                                    <option value="Public Transport">Public Transport</option>
-                                </select>
-                                <small>Used only for campus access and parking planning.</small>
+                        <div id="transportation-section" class="form-group" style="margin-top:15px;margin-bottom:0;">
+                            <h4 style="margin-bottom:10px;color:var(--accent);"><i class='bx bx-map-pin' style="margin-right:5px;"></i>Travel to SLIIT Malabe</h4>
+                            <p style="color:var(--text-muted);font-size:0.87rem;margin:0 0 12px;">This information is collected only for campus-access and parking planning. The map is provided to help local and international participants plan their journey.</p>
+                            <div class="form-group row" style="margin-bottom:12px;">
+                                <div class="input-field col">
+                                    <label for="transportMode">Transportation <span class="required">*</span></label>
+                                    <select id="transportMode" name="Transport_Mode" required>
+                                        <option value="" disabled selected>Select transportation</option>
+                                        <option value="Private Vehicle - Parking Required">Private vehicle — on-campus parking required</option>
+                                        <option value="Private Vehicle - No Parking">Private vehicle — no on-campus parking required</option>
+                                        <option value="Ride-hailing / Taxi">Ride-hailing / taxi (PickMe, Uber, etc.)</option>
+                                        <option value="Public Transport">Public transport (bus / train)</option>
+                                        <option value="Other / Arranged Transport">Other / arranged transport</option>
+                                    </select>
+                                </div>
+                                <div id="vehicle-number-group" class="input-field col hidden">
+                                    <label for="vehicleNumber">Vehicle Registration Number <span class="required">*</span></label>
+                                    <input type="text" id="vehicleNumber" name="Vehicle_Number" maxlength="30"
+                                        placeholder="E.g. CAB-1234" autocomplete="off">
+                                    <small>Required for campus security pre-clearance.</small>
+                                </div>
                             </div>
-                            <div id="vehicle-number-group" class="input-field col hidden">
-                                <label for="vehicleNumber">Vehicle Registration Number <span class="required">*</span></label>
-                                <input type="text" id="vehicleNumber" name="Vehicle_Number" maxlength="30"
-                                    placeholder="E.g. CAB-1234" autocomplete="off">
+                            <div style="overflow:hidden;border:1px solid rgba(255,255,255,0.12);border-radius:10px;">
+                                <iframe title="SLIIT Malabe Campus location" src="https://www.google.com/maps?q=SLIIT+Malabe+Campus&output=embed"
+                                    width="100%" height="250" style="display:block;border:0;" loading="lazy"
+                                    referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
                             </div>
+                            <a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=SLIIT+Malabe+Campus" target="_blank" rel="noopener"
+                                style="margin-top:10px;display:inline-flex;"><i class='bx bx-navigation'></i> Open Directions in Google Maps</a>
                         </div>
                     </div>
 
@@ -485,7 +499,7 @@
                     </div>
 
                     <!-- STEP 1 — Payment & Reference ID -->
-                    <div class="payment-section mt-4">
+                    <div id="step1-section" class="payment-section mt-4 hidden">
                         <h3 class="section-title"><strong style="color:var(--accent);">Step 1</strong> — Download Invoice &amp; Make Payment</h3>
 
                         <div class="highlight-box" style="background:rgba(0,120,200,0.06);border:1px solid rgba(0,150,255,0.25);margin-bottom:18px;padding:14px 18px;">
@@ -1098,7 +1112,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=97"></script>
+    <script src="app.js?v=98"></script>
 </body>
 
 </html>

@@ -488,15 +488,18 @@ function validateRegistration(input, mainFolder) {
   });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.Email || ''))) errors.push('A valid email is required.');
   if (['Local','SAARC','Non-SAARC'].indexOf(data.Attendee_Region) < 0) errors.push('Invalid attendee region.');
-  if (data.Attendee_Region === 'Local') {
-    if (['Private Vehicle', 'Public Transport'].indexOf(String(data.Transport_Mode || '').trim()) < 0) {
-      errors.push('Select private vehicle or public transport.');
-    }
-    if (String(data.Transport_Mode || '').trim() === 'Private Vehicle' && !String(data.Vehicle_Number || '').trim()) {
-      errors.push('Vehicle registration number is required for private vehicles.');
-    }
-    if (String(data.Vehicle_Number || '').length > 30) errors.push('Vehicle registration number is too long.');
+  const transportMode = String(data.Transport_Mode || '').trim();
+  const validTransportModes = [
+    'Private Vehicle - Parking Required', 'Private Vehicle - No Parking',
+    'Ride-hailing / Taxi', 'Public Transport', 'Other / Arranged Transport',
+    'Private Vehicle' // legacy value from schema v5
+  ];
+  if (validTransportModes.indexOf(transportMode) < 0) errors.push('Select a transportation option.');
+  if ((transportMode === 'Private Vehicle - Parking Required' || transportMode === 'Private Vehicle') &&
+      !String(data.Vehicle_Number || '').trim()) {
+    errors.push('Vehicle registration number is required when on-campus parking is requested.');
   }
+  if (String(data.Vehicle_Number || '').length > 30) errors.push('Vehicle registration number is too long.');
   if (!isValidRef(data.Invoice_ID)) errors.push('Invalid reference ID.');
   const registrationTypes = String(data.Registration_Type || '');
   let settings = null;
@@ -814,15 +817,15 @@ function normalizeConditionalRegistration(data, category) {
   if (!category || !category.is_student) {
     data.Include_Inauguration = '';
   }
+  data.Transport_Mode = String(data.Transport_Mode || '').trim();
+  data.Vehicle_Number = String(data.Vehicle_Number || '').trim().toUpperCase();
+  if (data.Transport_Mode !== 'Private Vehicle - Parking Required' && data.Transport_Mode !== 'Private Vehicle') {
+    data.Vehicle_Number = '';
+  }
   if (data.Attendee_Region === 'Local') {
     data.Excursion_Foreign_Count = '0';
-    data.Transport_Mode = String(data.Transport_Mode || '').trim();
-    data.Vehicle_Number = String(data.Vehicle_Number || '').trim().toUpperCase();
-    if (data.Transport_Mode !== 'Private Vehicle') data.Vehicle_Number = '';
   } else if (data.Attendee_Region) {
     data.Excursion_Local_Count = '0';
-    data.Transport_Mode = '';
-    data.Vehicle_Number = '';
   }
   return data;
 }
