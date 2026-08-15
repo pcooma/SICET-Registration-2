@@ -102,6 +102,7 @@ let pendingAdminView = 'settings';
 let appSettings = JSON.parse(JSON.stringify(defaultSettings)); // resolved properly in resolveSettings()
 let formDraft = readLocalJson('sicet2026_draft');
 let paymentProofFiles = []; // Managed array for multi-file proof of payment upload
+let lastDriveSubmissionError = '';
 let paymentProofPreviouslyUploaded = false; // true when loaded record already has proof on server
 let studentIdPreviouslyUploaded = false; // true when loaded record already has student ID on server
 let workshopIdPreviouslyUploaded = false; // true when loaded record already has workshop ID on server
@@ -2191,18 +2192,36 @@ async function generateInvoice() {
     }
     // Persist Step 1 before claiming success so the issued reference is recoverable.
     if (!invoiceAuditMode && APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+        const invoiceButton = document.getElementById('btn-download-invoice');
+        const originalButtonHtml = invoiceButton?.innerHTML || '';
+        if (invoiceButton) {
+            invoiceButton.disabled = true;
+            invoiceButton.innerHTML = `<i class='bx bx-loader bx-spin'></i> Saving reference securely…`;
+        }
         try {
             const dataObj = collectFormData(refId);
             dataObj.Status = isFreeReg ? 'Submitted' : 'Pending Payment';
             const studentIdInput = document.getElementById('studentId');
             if (studentIdInput?.files[0]) dataObj['Student_ID_Base64'] = await fileToBase64(studentIdInput.files[0]);
-            if (!await submitToGoogleDrive(dataObj)) {
-                showToast('Reference not saved. Please retry Step 1 before making payment.', 'error');
+            if (!await submitToGoogleDrive(dataObj, {
+                attempts: 3,
+                timeoutMs: 60000,
+                silent: true,
+                onRetry: attempt => {
+                    if (invoiceButton) invoiceButton.innerHTML = `<i class='bx bx-loader bx-spin'></i> Connection delayed — retrying (${attempt}/3)…`;
+                }
+            })) {
+                showToast(lastDriveSubmissionError || 'Reference not saved. Please check your connection and retry Step 1 before making payment.', 'error');
                 return;
             }
         } catch (error) {
             showToast(error.message || 'Reference not saved. Please retry Step 1.', 'error');
             return;
+        } finally {
+            if (invoiceButton) {
+                invoiceButton.disabled = false;
+                invoiceButton.innerHTML = originalButtonHtml;
+            }
         }
     }
     doc.save(pdfFileName);
@@ -3252,43 +3271,62 @@ function showUploadedStatus(inputId, label) {
     input.insertAdjacentElement('afterend', note);
 }
 
-async function submitToGoogleDrive(dataObj) {
+async function submitToGoogleDrive(dataObj, options = {}) {
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
-        showToast('Google Drive not configured. Ask the admin to deploy the Apps Script first.', 'error');
+        lastDriveSubmissionError = 'Google Drive not configured. Ask the admin to deploy the Apps Script first.';
+        if (!options.silent) showToast(lastDriveSubmissionError, 'error');
         return false;
     }
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
-    try {
-        const response = await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(dataObj),
-            signal: controller.signal
-        });
-        if (!response.ok) throw new Error(`Upload server returned HTTP ${response.status}.`);
-        const responseText = await response.text();
-        let result;
+    const attempts = Math.max(1, Number(options.attempts) || 1);
+    const timeoutMs = Math.max(10000, Number(options.timeoutMs) || 120000);
+    lastDriveSubmissionError = '';
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
-            result = JSON.parse(responseText);
-        } catch (_) {
-            throw new Error('Upload server returned an unreadable response. Please retry once.');
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(dataObj),
+                signal: controller.signal
+            });
+            if (!response.ok) {
+                const httpError = new Error(`Upload server returned HTTP ${response.status}.`);
+                httpError.retryable = response.status >= 500 || response.status === 429;
+                throw httpError;
+            }
+            const responseText = await response.text();
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (_) {
+                const parseError = new Error('Upload server returned an unreadable response.');
+                parseError.retryable = true;
+                throw parseError;
+            }
+            if (result.success) return true;
+
+            lastDriveSubmissionError = result.error || 'The server rejected the registration.';
+            const retryableServerError = /server busy|try again|temporar|timeout/i.test(lastDriveSubmissionError);
+            if (!retryableServerError || attempt === attempts) break;
+        } catch (err) {
+            lastDriveSubmissionError = err.name === 'AbortError'
+                ? 'The connection timed out while saving your reference.'
+                : (err.message || 'Network error while saving your registration.');
+            const retryable = err.name === 'AbortError' || err.retryable !== false;
+            console.error(`Drive submission attempt ${attempt} failed:`, err);
+            if (!retryable || attempt === attempts) break;
+        } finally {
+            clearTimeout(timeoutId);
         }
-        if (!result.success) {
-            showToast(result.error || 'The server rejected the registration.', 'error');
-            return false;
-        }
-        return true;
-    } catch (err) {
-        const message = err.name === 'AbortError'
-            ? 'Upload timed out. Your selected slip is still available — please check your connection and retry.'
-            : (err.message || 'Network error — please check your connection and try again.');
-        showToast(message, 'error');
-        console.error('Drive submission error:', err);
-        return false;
-    } finally {
-        clearTimeout(timeoutId);
+        if (typeof options.onRetry === 'function') options.onRetry(attempt + 1);
+        await new Promise(resolve => setTimeout(resolve, 700 * attempt));
     }
+
+    lastDriveSubmissionError = `${lastDriveSubmissionError} Your details are still on this page; please retry Step 1. If it continues, select “Technical Difficulty / Registration System” under Have a Query.`;
+    if (!options.silent) showToast(lastDriveSubmissionError, 'error');
+    return false;
 }
 
 async function loadFromGoogleDrive() {
