@@ -2956,6 +2956,11 @@ function applyRegistrationAvailability() {
         const control = appSettings.registration_controls?.[item.key] || {};
         const isOpen = registrationOptionIsOpen(item.key);
         const row = toggle.closest('.form-checkbox');
+        const hasConferenceWorkshops = (appSettings.conference_workshops || []).some(workshopIsAvailable);
+        const shouldShow = isOpen
+            && !(item.key === 'pre_conference' && appSettings.preconf_workshops_hidden)
+            && !(item.key === 'conference_workshops' && !hasConferenceWorkshops);
+        if (row) row.classList.toggle('hidden', !shouldShow);
         let status = row?.querySelector('.registration-availability-status');
         if (!status && row) {
             status = document.createElement('small');
@@ -2969,13 +2974,7 @@ function applyRegistrationAvailability() {
             toggle.dispatchEvent(new Event('change'));
         }
         if (status) {
-            if (control.enabled === false) {
-                status.textContent = 'Registration closed by the organiser.';
-                status.style.color = '#e8b84b';
-            } else if (control.cutoff_date && control.cutoff_date < currentColomboDate()) {
-                status.textContent = `Registration closed on ${control.cutoff_date}.`;
-                status.style.color = '#e8b84b';
-            } else if (control.cutoff_date) {
+            if (isOpen && control.cutoff_date) {
                 status.textContent = `Registration open through ${control.cutoff_date}.`;
                 status.style.color = 'var(--text-muted)';
             } else {
