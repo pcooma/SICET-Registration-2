@@ -376,8 +376,30 @@ function validateSettings(input) {
   }
   const rate = Number(settings.usd_to_lkr);
   if (!isFinite(rate) || rate <= 0) errors.push('USD exchange rate must be greater than zero.');
+  validateRegistrationControls(settings.registration_controls, errors);
   validateNonNegativeNumbers(settings, '', errors);
   return { valid: errors.length === 0, errors: errors, settings: settings };
+}
+
+function validateRegistrationControls(controls, errors) {
+  const keys = ['main', 'award', 'excursion', 'pre_conference', 'conference_workshops'];
+  if (controls === undefined || controls === null) return; // legacy settings remain open
+  if (typeof controls !== 'object' || Array.isArray(controls)) {
+    errors.push('Registration availability settings are invalid.');
+    return;
+  }
+  keys.forEach(function(key) {
+    const control = controls[key];
+    if (!control || typeof control !== 'object') {
+      errors.push('Registration availability is missing for ' + key + '.');
+      return;
+    }
+    control.enabled = control.enabled !== false;
+    control.cutoff_date = String(control.cutoff_date || '').trim();
+    if (control.cutoff_date && !/^\d{4}-\d{2}-\d{2}$/.test(control.cutoff_date)) {
+      errors.push('Invalid registration cutoff date for ' + key + '.');
+    }
+  });
 }
 
 function validateSettingsCollection(items, type, labelKey, errors) {
@@ -507,9 +529,10 @@ function validateRegistration(input, mainFolder) {
   const hasPreConferenceSelection = hasRegistrationType(registrationTypes, 'Pre-Conference Workshops') && String(data.PreConf_Session_IDs || '').trim();
   const hasConferenceSelection = hasRegistrationType(registrationTypes, 'Conference Workshops') && String(data.Conference_Workshop_IDs || '').trim();
   const hasMainRegistration = hasRegistrationType(registrationTypes, 'Main');
-  if (hasMainRegistration || hasPreConferenceSelection || hasConferenceSelection) {
+  if (String(registrationTypes).trim()) {
     settings = readCurrentSettings(mainFolder);
     todayColombo = Utilities.formatDate(new Date(), 'Asia/Colombo', 'yyyy-MM-dd');
+    validateRegistrationAvailability(registrationTypes, settings, todayColombo, errors);
   }
   if (hasMainRegistration) {
     const categories = settings.categories || [];
@@ -562,6 +585,22 @@ function validateRegistration(input, mainFolder) {
   proofs.forEach(function(p, i) { validateUpload(p, 'Payment proof ' + (i + 1), errors); });
   data.Submission_Date = new Date().toISOString();
   return { valid: errors.length === 0, errors: errors, data: data };
+}
+
+function validateRegistrationAvailability(registrationTypes, settings, today, errors) {
+  const controls = settings.registration_controls || {};
+  [
+    { type: 'Main', key: 'main', label: 'Main Conference' },
+    { type: 'Award', key: 'award', label: 'Excellence Award' },
+    { type: 'Excursion', key: 'excursion', label: 'Excursion' },
+    { type: 'Pre-Conference Workshops', key: 'pre_conference', label: 'Pre-Conference Workshops' },
+    { type: 'Conference Workshops', key: 'conference_workshops', label: 'Technical Workshops During Conference' }
+  ].forEach(function(item) {
+    if (!hasRegistrationType(registrationTypes, item.type)) return;
+    const control = controls[item.key] || {};
+    if (control.enabled === false) errors.push(item.label + ' registration is closed.');
+    else if (control.cutoff_date && control.cutoff_date < today) errors.push(item.label + ' registration closed on ' + control.cutoff_date + '.');
+  });
 }
 
 function validateAuthorPaperDetails(data, category, errors) {

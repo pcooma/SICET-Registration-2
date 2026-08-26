@@ -40,6 +40,13 @@ const defaultSettings = {
     usd_to_lkr: 320,
     apc_collection_active: false,
     preconf_workshops_hidden: false,
+    registration_controls: {
+        main: { enabled: true, cutoff_date: '' },
+        award: { enabled: true, cutoff_date: '' },
+        excursion: { enabled: true, cutoff_date: '' },
+        pre_conference: { enabled: true, cutoff_date: '' },
+        conference_workshops: { enabled: true, cutoff_date: '' }
+    },
     award_categories: ['Innovation', 'Sustainability', 'Leadership'],
     award_purposes: ['Networking', 'To Receive Award', 'Other'],
     excursion_mobility_options: ['None', 'Wheelchair Access Needed', 'Limited Walking preferred'],
@@ -123,6 +130,7 @@ async function init() {
     rebuildAwardPurposeDropdown();
     rebuildExcursionMobilityDropdown();
     rebuildExcursionActivityDropdown();
+    applyRegistrationAvailability();
     generatePaperBlocks(1);
     setupEventListeners();
     updateSubmitButtonState();
@@ -729,6 +737,14 @@ function normalizeSectionToggleState(toggle) {
 }
 
 function validateActiveProductSelections() {
+    const closedSelection = getRegistrationControlDefinitions().find(item => {
+        const toggle = document.getElementById(item.toggleId);
+        return toggle?.checked && !registrationOptionIsOpen(item.key);
+    });
+    if (closedSelection) {
+        showToast(`${closedSelection.label} registration is closed. Refresh the page and choose an available option.`, 'error');
+        return false;
+    }
     const invalid = Array.from(registrationForm.querySelectorAll('[required]')).find(field =>
         !field.disabled && field.offsetParent !== null && !field.checkValidity());
     if (invalid) {
@@ -2892,6 +2908,83 @@ function exportToExcel() {
 
 // ---- ADMIN SETTINGS LOGIC ----
 
+function getRegistrationControlDefinitions() {
+    return [
+        { key: 'main', label: 'Main Conference', toggleId: 'toggleMain' },
+        { key: 'award', label: 'Excellence Award', toggleId: 'toggleAward' },
+        { key: 'excursion', label: 'Excursion', toggleId: 'toggleExcursion' },
+        { key: 'pre_conference', label: 'Pre-Conference Workshops', toggleId: 'togglePreConf' },
+        { key: 'conference_workshops', label: 'Technical Workshops During Conference', toggleId: 'toggleConferenceWorkshops' }
+    ];
+}
+
+function registrationOptionIsOpen(key) {
+    const control = appSettings.registration_controls?.[key] || {};
+    return control.enabled !== false && (!control.cutoff_date || control.cutoff_date >= currentColomboDate());
+}
+
+function renderRegistrationControlsAdmin() {
+    const list = document.getElementById('registration-controls-list');
+    if (!list) return;
+    list.innerHTML = getRegistrationControlDefinitions().map(item => {
+        const control = appSettings.registration_controls?.[item.key] || { enabled: true, cutoff_date: '' };
+        return `<div class="registration-control-entry" data-control-key="${item.key}" style="display:grid;grid-template-columns:minmax(220px,1fr) minmax(180px,260px);gap:18px;align-items:end;padding:12px 14px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+            <div class="form-checkbox" style="margin:0 0 9px;">
+                <input type="checkbox" class="registration-control-enabled" id="registration_control_${item.key}" ${control.enabled !== false ? 'checked' : ''}>
+                <label for="registration_control_${item.key}" style="font-weight:600;">Enable ${item.label} registration</label>
+            </div>
+            <div class="input-field"><label>Registration Cutoff Date <small style="color:var(--text-muted);">(optional)</small></label><input type="date" class="registration-control-cutoff" value="${control.cutoff_date || ''}"></div>
+        </div>`;
+    }).join('');
+}
+
+function saveRegistrationControlsFromAdmin() {
+    const controls = {};
+    document.querySelectorAll('.registration-control-entry').forEach(row => {
+        controls[row.dataset.controlKey] = {
+            enabled: row.querySelector('.registration-control-enabled')?.checked === true,
+            cutoff_date: row.querySelector('.registration-control-cutoff')?.value || ''
+        };
+    });
+    appSettings.registration_controls = controls;
+}
+
+function applyRegistrationAvailability() {
+    getRegistrationControlDefinitions().forEach(item => {
+        const toggle = document.getElementById(item.toggleId);
+        if (!toggle) return;
+        const control = appSettings.registration_controls?.[item.key] || {};
+        const isOpen = registrationOptionIsOpen(item.key);
+        const row = toggle.closest('.form-checkbox');
+        let status = row?.querySelector('.registration-availability-status');
+        if (!status && row) {
+            status = document.createElement('small');
+            status.className = 'registration-availability-status';
+            status.style.cssText = 'display:block;margin:4px 0 0 24px;color:var(--text-muted);';
+            row.appendChild(status);
+        }
+        toggle.disabled = !isOpen;
+        if (!isOpen && toggle.checked) {
+            toggle.checked = false;
+            toggle.dispatchEvent(new Event('change'));
+        }
+        if (status) {
+            if (control.enabled === false) {
+                status.textContent = 'Registration closed by the organiser.';
+                status.style.color = '#e8b84b';
+            } else if (control.cutoff_date && control.cutoff_date < currentColomboDate()) {
+                status.textContent = `Registration closed on ${control.cutoff_date}.`;
+                status.style.color = '#e8b84b';
+            } else if (control.cutoff_date) {
+                status.textContent = `Registration open through ${control.cutoff_date}.`;
+                status.style.color = 'var(--text-muted)';
+            } else {
+                status.textContent = '';
+            }
+        }
+    });
+}
+
 function populateSettingsForm() {
     document.getElementById('fee_conf_student_discount').value = appSettings.discounts.student_from_2nd;
     document.getElementById('fee_discount_max_papers').value = appSettings.discounts.discount_max_papers || 0;
@@ -2920,6 +3013,8 @@ function populateSettingsForm() {
     // Pre-Conference Workshops hidden
     const preconfHiddenEl = document.getElementById('setting_preconf_hidden');
     if (preconfHiddenEl) preconfHiddenEl.checked = appSettings.preconf_workshops_hidden || false;
+
+    renderRegistrationControlsAdmin();
 
     // Journals
     renderJournalsAdmin();
@@ -2991,6 +3086,7 @@ async function saveSettings(e) {
 
     const preconfHiddenEl = document.getElementById('setting_preconf_hidden');
     appSettings.preconf_workshops_hidden = preconfHiddenEl ? preconfHiddenEl.checked : false;
+    saveRegistrationControlsFromAdmin();
 
     appSettings.excursion_fees.local = Number(document.getElementById('fee_excursion_local').value);
     appSettings.excursion_fees.foreigner = Number(document.getElementById('fee_excursion_foreigner').value);
@@ -3063,6 +3159,7 @@ async function saveSettings(e) {
     rebuildAwardPurposeDropdown();
     rebuildExcursionMobilityDropdown();
     rebuildExcursionActivityDropdown();
+    applyRegistrationAvailability();
     generatePaperBlocks(parseInt(document.getElementById('numberOfPapers')?.value) || 1);
     updateCostPreviews();
     const _waIssueType = document.getElementById('wa-issue-type')?.value;

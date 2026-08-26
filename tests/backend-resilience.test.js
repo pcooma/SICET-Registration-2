@@ -32,7 +32,14 @@ const validSettings = {
     { id: 'pcs1', name: 'Workshop A', fee_local: 10000, fee_saarc: 35, fee_nonsaarc: 50 }
   ],
   journals: [{ id: 'j1', name: 'Scopus Q1', fee: 300, apc_not_applicable: false }],
-  usd_to_lkr: 320
+  usd_to_lkr: 320,
+  registration_controls: {
+    main: { enabled: true, cutoff_date: '' },
+    award: { enabled: true, cutoff_date: '' },
+    excursion: { enabled: true, cutoff_date: '' },
+    pre_conference: { enabled: true, cutoff_date: '' },
+    conference_workshops: { enabled: true, cutoff_date: '' }
+  }
 };
 
 assert.equal(sandbox.validateSettings(validSettings).valid, true, 'valid settings should pass');
@@ -241,10 +248,31 @@ const tamperedFreeClaim = sandbox.calculateAuthoritativeFee({
 assert.equal(tamperedFreeClaim.total, 150, 'a client-supplied zero must not bypass payment requirements');
 
 const emptyFolder = {
+  getFilesByName(name) {
+    const matches = name === 'sicet2026_settings.json'
+      ? [{ getBlob: () => ({ getDataAsString: () => JSON.stringify(validSettings) }) }]
+      : [];
+    let index = 0;
+    return { hasNext: () => index < matches.length, next: () => matches[index++] };
+  },
   getFolders() {
     return { hasNext: () => false };
   }
 };
+
+const closedMainErrors = [];
+sandbox.validateRegistrationAvailability('Main + Award', {
+  registration_controls: {
+    main: { enabled: false, cutoff_date: '' },
+    award: { enabled: true, cutoff_date: '' }
+  }
+}, '2026-08-14', closedMainErrors);
+assert.deepEqual(Array.from(closedMainErrors), ['Main Conference registration is closed.'], 'Main can close while Excellence Award remains open');
+const cutoffErrors = [];
+sandbox.validateRegistrationAvailability('Excursion', {
+  registration_controls: { excursion: { enabled: true, cutoff_date: '2026-08-13' } }
+}, '2026-08-14', cutoffErrors);
+assert.deepEqual(Array.from(cutoffErrors), ['Excursion registration closed on 2026-08-13.'], 'a cutoff closes registration after the selected Colombo date');
 const baseRegistration = {
   Full_Name: 'Test User',
   Email: 'test@example.com',

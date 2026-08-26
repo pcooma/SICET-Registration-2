@@ -917,6 +917,13 @@
 
                 <form id="settings-form" class="settings-grid">
 
+                    <!-- Registration availability -->
+                    <div class="settings-card full-width">
+                        <h3><i class='bx bx-calendar-x'></i> Registration Availability</h3>
+                        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:16px;">Control each registration option independently. An enabled option remains open through its cutoff date. Leave the cutoff blank to keep it open until you disable it.</p>
+                        <div id="registration-controls-list" style="display:grid;gap:12px;"></div>
+                    </div>
+
                     <!-- Excursion & Awards Config -->
                     <div class="settings-card">
                         <h3><i class='bx bx-award'></i> Other Registration Fees</h3>
@@ -1113,7 +1120,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <!-- Add jsPDF Script for Invoice Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="app.js?v=100"></script>
+    <script src="app.js?v=101"></script>
 </body>
 
 </html>
